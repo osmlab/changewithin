@@ -33,7 +33,7 @@ def point_in_poly(x, y, poly):
     n = len(poly)
     inside = False
     p1x, p1y = poly[0]
-    for i in range(n + 1):
+    for i in xrange(n + 1):
         p2x, p2y = poly[i % n]
         if y > min(p1y, p2y):
             if y <= max(p1y, p2y):
@@ -63,8 +63,6 @@ def loadChangeset(changeset):
     if comment is not None: changeset['comment'] = comment.get('v')
     if created_by is not None: changeset['created_by'] = created_by.get('v')
     return changeset
-
-# geojson = { "type": "FeatureCollection", "features": [] }
 
 ny = json.load(open('nyc.geojson'))
 nypoly = ny['features'][0]['geometry']['coordinates'][0]
@@ -135,8 +133,43 @@ user <a href='http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}'>{{
   {{/changesets}}
 """
 
-print pystache.render(tmpl, {
+text_tmpl = """
+## OSM Change Report
+{{#changesets}}
+
+<h2>Changeset http://openstreetmap.org/browse/changeset/{{id}}
+<p>
+user http://openstreetmap.org/user/{{#details}}{{user}}{{/details}} {{#details}}{{user}}{{/details}} used {{created_by}}
+</p>
+
+### Ways
+{{#wids}}
+* http://openstreetmap.org/browse/way/{{.}}
+{{/wids}}
+
+### Nodes
+<ul>
+{{#nids}}
+* http://openstreetmap.org/browse/node/{{.}}
+{{/nids}}
+</ul>
+{{/changesets}}
+"""
+
+html_version = pystache.render(tmpl, {
     'changesets': changesets
 })
 
-# json.dump(changesets, open('output.json', 'w'), indent=4)
+text_version = pystache.render(tmpl, {
+    'changesets': changesets
+})
+
+requests.post(('https://api.mailgun.net/v2/samples.mailgun.org/messages'),
+    auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
+    data = {
+            'from': 'Change Within <changewithin@changewithin.mailgun.org>',
+            'to': json.load(open('users.json')),
+            'subject': 'Daily OSM Report',
+            'text': text_version,
+            "html": html_version,
+    })
