@@ -2,11 +2,9 @@
 
 Requires Python with lxml, requests, pystache
 
-With [pip](https://pypi.python.org/pypi/pip):
-
-    sudo pip install requests
-    sudo pip install pystache
+    mkvirtualenv --no-site-packages changewithin
+    pip install -r requirements.txt
 
 ## Running
 
-    python changewithin.py > index.html
+    python changewithin.py
