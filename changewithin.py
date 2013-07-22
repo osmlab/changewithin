@@ -116,6 +116,9 @@ tmpl = """
 <p>
 user <a href='http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}'>{{#details}}{{user}}{{/details}}</a> used {{created_by}}
 </p>
+<p>
+{{comment}}
+</p>
 
 <h3>Ways<h3>
   <ul>
@@ -164,7 +167,7 @@ text_version = pystache.render(tmpl, {
     'changesets': changesets
 })
 
-requests.post(('https://api.mailgun.net/v2/samples.mailgun.org/messages'),
+resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messages'),
     auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
     data = {
             'from': 'Change Within <changewithin@changewithin.mailgun.org>',
@@ -173,3 +176,7 @@ requests.post(('https://api.mailgun.net/v2/samples.mailgun.org/messages'),
             'text': text_version,
             "html": html_version,
     })
+
+print html_version
+
+# print resp, resp.text
