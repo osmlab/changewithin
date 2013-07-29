@@ -6,7 +6,7 @@ from sets import Set
 import pystache
 
 def extractosc(): os.system('gunzip -f change.osc.gz')
-def readosc(): return etree.parse('change.osc')
+def readosc(): return etree.parse('hourtest.osc')
 
 def getstate():
     r = requests.get('http://planet.openstreetmap.org/replication/day/state.txt')
@@ -47,6 +47,8 @@ def point_in_poly(x, y, poly):
 
 def pip(lon, lat): return point_in_poly(lon, lat, nypoly)
 
+def coordAverage(c1, c2): return (float(c1) + float(c2)) / 2
+
 def hasbuildingtag(n):
     return n.find(".//tag[@k='building']") is not None or n.find(".//tag[@k='amenity']") is not None
 
@@ -56,12 +58,15 @@ def loadChangeset(changeset):
     url = 'http://api.openstreetmap.org/api/0.6/changeset/%s' % changeset['id']
     r = requests.get(url)
     if not r.text: return changeset
-    t = etree.fromstring(str(r.text))
+    t = etree.fromstring(r.text.encode('utf-8'))
     changeset['details'] = dict(t.find('.//changeset').attrib)
     comment = t.find(".//tag[@k='comment']")
     created_by = t.find(".//tag[@k='created_by']")
     if comment is not None: changeset['comment'] = comment.get('v')
     if created_by is not None: changeset['created_by'] = created_by.get('v')
+    center_lat = coordAverage(changeset['details']['min_lat'], changeset['details']['max_lat'])
+    center_lon = coordAverage(changeset['details']['min_lon'], changeset['details']['max_lon'])
+    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/matt.map-38s82292/%s,%s,16/300x300.png' % (center_lon, center_lat)
     return changeset
 
 ny = json.load(open('nyc.geojson'))
@@ -78,6 +83,8 @@ tree = readosc()
 
 nids = Set()
 changesets = {}
+stats = {}
+stats['buildings'] = 0
 
 sys.stderr.write('finding points\n')
 
@@ -90,10 +97,12 @@ for n in tree.iterfind('.//node'):
 sys.stderr.write('finding changesets\n')
 
 for w in tree.iterfind('.//way'):
+    building = False
     cid = w.get('changeset')
     wid = w.get('id', -1)
     for nd in w.iterfind('./nd'):
         if nd.get('ref', -2) in nids and hasbuildingtag(w):
+            building = True
             if not changesets.get(cid, False):
                 changesets[cid] = {
                     'id': cid,
@@ -105,35 +114,27 @@ for w in tree.iterfind('.//way'):
             nid = nd.get('ref', -2)
             changesets[cid]['nids'].add(nid)
             changesets[cid]['wids'].add(wid)
+    if building:
+        stats['buildings'] += 1
 
 changesets = map(loadChangeset, changesets.values())
 
-tmpl = """
-<h1>OSM Change Report</h1>
-{{#changesets}}
+stats['total'] = len(changesets)
 
+tmpl = """
+<h1>Summary</h1>
+{{#stats}}
+Total changesets: {{total}}<br>
+Total building footprint changes: {{buildings}}
+{{/stats}}
+{{#changesets}}
 <h2>Changeset #<a href='http://openstreetmap.org/browse/changeset/{{id}}'>{{id}}</a></h2>
 <p>
-user <a href='http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}'>{{#details}}{{user}}{{/details}}</a> used {{created_by}}
+<a href='http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}'>{{#details}}{{user}}{{/details}}</a>: {{comment}}
 </p>
-<p>
-{{comment}}
-</p>
-
-<h3>Ways<h3>
-  <ul>
-  {{#wids}}
-  <li><a href='http://openstreetmap.org/browse/way/{{.}}'>#{{.}}</a> / <a href='http://osmlab.github.io/osm-deep-history/#/way/{{.}}'>history</a></li>
-  {{/wids}}
-  </ul>
-
-<h3>Nodes<h3>
-  <ul>
-  {{#nids}}
-  <li><a href='http://openstreetmap.org/browse/node/{{.}}'>#{{.}}</a> / <a href='http://osmlab.github.io/osm-deep-history/#/node/{{.}}'>history</a></li>
-  {{/nids}}
-  </ul>
-  {{/changesets}}
+Changed buildings: {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}'>#{{.}}</a>{{/wids}}
+<img src='{{map_img}}' />
+{{/changesets}}
 """
 
 text_tmpl = """
@@ -160,11 +161,13 @@ user http://openstreetmap.org/user/{{#details}}{{user}}{{/details}} {{#details}}
 """
 
 html_version = pystache.render(tmpl, {
-    'changesets': changesets
+    'changesets': changesets,
+    'stats': stats
 })
 
-text_version = pystache.render(tmpl, {
-    'changesets': changesets
+text_version = pystache.render(text_tmpl, {
+    'changesets': changesets,
+    'stats': stats
 })
 
 resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messages'),
