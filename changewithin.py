@@ -89,7 +89,7 @@ def loadChangeset(changeset):
     if created_by is not None: changeset['created_by'] = created_by.get('v')
     center_lat = coordAverage(changeset['details']['min_lat'], changeset['details']['max_lat'])
     center_lon = coordAverage(changeset['details']['min_lon'], changeset['details']['max_lon'])
-    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/matt.map-38s82292/%s,%s,15/300x225.png' % (center_lon, center_lat)
+    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/examples.map-uci7ul8p/%s,%s,15/300x225.png' % (center_lon, center_lat)
     changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=15&layers=M' % (center_lat, center_lon)
     return changeset
 
