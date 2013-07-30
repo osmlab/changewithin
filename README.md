@@ -5,6 +5,10 @@ with [mailgun](http://www.mailgun.com/).
 
 ## Installation
 
+Requires wget, use [homebrew](http://brew.sh/) for the simplest installation:
+
+    brew install wget
+
 Requires Python with lxml, requests, pystache
 
     mkvirtualenv --no-site-packages changewithin
