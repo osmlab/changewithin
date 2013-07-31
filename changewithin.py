@@ -137,10 +137,12 @@ for n in tree.iterfind('.//node'):
         if version != 1:
             if hasaddresschange(nid, addr_tags, version, 'node'):
                 addchangeset(n, cid)
+                changesets[cid]['nids'].add(nid)
                 changesets[cid]['addr_chg'].add(nid)
                 stats['addresses'] += 1
         elif len(addr_tags):
             addchangeset(n, cid)
+            changesets[cid]['nids'].add(nid)
             changesets[cid]['addr_chg'].add(nid)
             stats['addresses'] += 1
 
