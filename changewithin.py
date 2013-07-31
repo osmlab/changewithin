@@ -60,13 +60,13 @@ def getaddresstags(tags):
             addr_tags.append(t.attrib)
     return addr_tags
     
-def hasaddresschange(wid, addr, version):
-    url = 'http://api.openstreetmap.org/api/0.6/way/%s/history' % wid
+def hasaddresschange(gid, addr, version, elem):
+    url = 'http://api.openstreetmap.org/api/0.6/%s/%s/history' % (elem, gid)
     r = requests.get(url)
     if not r.text: return False
-    w = etree.fromstring(r.text.encode('utf-8'))
-    previous_way = w.find(".//way[@version='%s']" % (version - 1))
-    previous_addr = getaddresstags(previous_way.findall(".//tag[@k]"))
+    e = etree.fromstring(r.text.encode('utf-8'))
+    previous_elem = e.find(".//%s[@version='%s']" % (elem, (version - 1)))
+    previous_addr = getaddresstags(previous_elem.findall(".//tag[@k]"))
     if len(addr) != len(previous_addr):
         return True
     else:
@@ -111,13 +111,38 @@ stats = {}
 stats['buildings'] = 0
 stats['addresses'] = 0
 
+def addchangeset(el, cid):
+    if not changesets.get(cid, False):
+        changesets[cid] = {
+            'id': cid,
+            'user': el.get('user'),
+            'uid': el.get('uid'),
+            'wids': Set(),
+            'nids': Set(),
+            'addr_chg': Set()
+        }
+
 sys.stderr.write('finding points\n')
 
 for n in tree.iterfind('.//node'):
     lon = float(n.get('lon', 0))
     lat = float(n.get('lat', 0))
     if point_in_box(lon, lat, nybox) and pip(lon, lat):
-        nids.add(n.get('id', -1))
+        cid = n.get('changeset')
+        nid = n.get('id', -1)
+        nids.add(nid)
+        ntags = n.findall(".//tag[@k]")
+        addr_tags = getaddresstags(ntags)
+        version = int(n.get('version'))
+        if version != 1:
+            if hasaddresschange(nid, addr_tags, version, 'node'):
+                addchangeset(n, cid)
+                changesets[cid]['addr_chg'].add(nid)
+                stats['addresses'] += 1
+        elif len(addr_tags):
+            addchangeset(n, cid)
+            changesets[cid]['addr_chg'].add(nid)
+            stats['addresses'] += 1
 
 sys.stderr.write('finding changesets\n')
 
@@ -129,15 +154,7 @@ for w in tree.iterfind('.//way'):
         for nd in w.iterfind('./nd'):
             if nd.get('ref', -2) in nids:
                 relevant = True
-                if not changesets.get(cid, False):
-                    changesets[cid] = {
-                        'id': cid,
-                        'user': w.get('user'),
-                        'uid': w.get('uid'),
-                        'wids': Set(),
-                        'nids': Set(),
-                        'addr_chg': Set()
-                    }
+                addchangeset(w, cid)
                 nid = nd.get('ref', -2)
                 changesets[cid]['nids'].add(nid)
                 changesets[cid]['wids'].add(wid)
@@ -147,7 +164,7 @@ for w in tree.iterfind('.//way'):
         version = int(w.get('version'))
         addr_tags = getaddresstags(wtags)
         if version != 1:
-            if hasaddresschange(wid, addr_tags, version):
+            if hasaddresschange(wid, addr_tags, version, 'way'):
                 changesets[cid]['addr_chg'].add(wid)
                 stats['addresses'] += 1
         elif len(addr_tags):
@@ -181,10 +198,10 @@ tmpl = """
 <a href='http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}' style='text-decoration:none;color:#3879D9;font-weight:bold;'>{{#details}}{{user}}{{/details}}</a>: {{comment}}
 </p>
 <p style='font-size:14px;line-height:17px;'>
-Changed buildings: {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}
+Changed buildings: {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}
 </p>
 <p style='font-size:14px;line-height:17px;'>
-Changed addresses: {{#addr_chg}}<a href='http://openstreetmap.org/browse/way/{{.}}' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg}}
+Changed addresses: {{#addr_chg}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg}}
 </p>
 </ul>
 <a href='{{map_link}}'><img src='{{map_img}}' style='border:1px solid #ccc;' /></a>
