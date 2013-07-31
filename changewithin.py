@@ -246,22 +246,23 @@ text_version = pystache.render(text_tmpl, {
     'stats': stats
 })
 
-now = datetime.now()
+if len(changesets) > 0:
+    now = datetime.now()
+    
+    resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messages'),
+        auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
+        data = {
+                'from': 'Change Within <changewithin@changewithin.mailgun.org>',
+                'to': json.load(open('users.json')),
+                'subject': 'OSM building and address changes %s' % now.strftime("%B %d %Y"),
+                'text': text_version,
+                "html": html_version,
+        })
 
-resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messages'),
-    auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
-    data = {
-            'from': 'Change Within <changewithin@changewithin.mailgun.org>',
-            'to': json.load(open('users.json')),
-            'subject': 'OSM building and address changes %s' % now.strftime("%B %d %Y"),
-            'text': text_version,
-            "html": html_version,
-    })
-
-f_out = open('osm_change_report_%s.html' % now.strftime("%m-%d-%y"), 'w')
-f_out.write(html_version.encode('utf-8'))
-f_out.close()
+    f_out = open('osm_change_report_%s.html' % now.strftime("%m-%d-%y"), 'w')
+    f_out.write(html_version.encode('utf-8'))
+    f_out.close()
+    
+    # print resp, resp.text
 
 # print html_version
-
-# print resp, resp.text
