@@ -6,7 +6,6 @@ from sets import Set
 import pystache
 
 def extractosc(): os.system('gunzip -f change.osc.gz')
-def readosc(): return etree.parse('change.osc')
 
 def getstate():
     r = requests.get('http://planet.openstreetmap.org/replication/day/state.txt')
@@ -50,7 +49,7 @@ def pip(lon, lat): return point_in_poly(lon, lat, nypoly)
 def coordAverage(c1, c2): return (float(c1) + float(c2)) / 2
 
 def hasbuildingtag(n):
-    return n.find(".//tag[@k='building']") is not None or n.find(".//tag[@k='amenity']") is not None
+    return n.find(".//tag[@k='building']") is not None
     
 def getaddresstags(tags):
     addr_tags = []
@@ -77,7 +76,8 @@ def hasaddresschange(gid, addr, version, elem):
 def loadChangeset(changeset):
     changeset['wids'] = list(changeset['wids'])
     changeset['nids'] = list(changeset['nids'])
-    changeset['addr_chg'] = list(changeset['addr_chg'])
+    changeset['addr_chg_nd'] = list(changeset['addr_chg_nd'])
+    changeset['addr_chg_way'] = list(changeset['addr_chg_way'])
     url = 'http://api.openstreetmap.org/api/0.6/changeset/%s' % changeset['id']
     r = requests.get(url)
     if not r.text: return changeset
@@ -103,7 +103,6 @@ sys.stderr.write('extracting\n')
 extractosc()
 
 sys.stderr.write('reading file\n')
-tree = readosc()
 
 nids = Set()
 changesets = {}
@@ -119,59 +118,80 @@ def addchangeset(el, cid):
             'uid': el.get('uid'),
             'wids': Set(),
             'nids': Set(),
-            'addr_chg': Set()
+            'addr_chg_way': Set(),
+            'addr_chg_nd': Set()
         }
 
 sys.stderr.write('finding points\n')
 
-for n in tree.iterfind('.//node'):
-    lon = float(n.get('lon', 0))
-    lat = float(n.get('lat', 0))
-    if point_in_box(lon, lat, nybox) and pip(lon, lat):
-        cid = n.get('changeset')
-        nid = n.get('id', -1)
-        nids.add(nid)
-        ntags = n.findall(".//tag[@k]")
-        addr_tags = getaddresstags(ntags)
-        version = int(n.get('version'))
-        if version != 1:
-            if hasaddresschange(nid, addr_tags, version, 'node'):
-                addchangeset(n, cid)
-                changesets[cid]['nids'].add(nid)
-                changesets[cid]['addr_chg'].add(nid)
-                stats['addresses'] += 1
-        elif len(addr_tags):
-            addchangeset(n, cid)
-            changesets[cid]['nids'].add(nid)
-            changesets[cid]['addr_chg'].add(nid)
-            stats['addresses'] += 1
+# Find nodes that fall within specified area
+context = iter(etree.iterparse('change.osc', events=('start', 'end')))
+event, root = context.next()
+for event, n in context:
+    if event == 'start':
+        if n.tag == 'node':
+            lon = float(n.get('lon', 0))
+            lat = float(n.get('lat', 0))
+            if point_in_box(lon, lat, nybox) and pip(lon, lat):
+                cid = n.get('changeset')
+                nid = n.get('id', -1)
+                nids.add(nid)
+                ntags = n.findall(".//tag[@k]")
+                addr_tags = getaddresstags(ntags)
+                version = int(n.get('version'))
+                
+                # Capture address changes
+                if version != 1:
+                    if hasaddresschange(nid, addr_tags, version, 'node'):
+                        addchangeset(n, cid)
+                        changesets[cid]['nids'].add(nid)
+                        changesets[cid]['addr_chg_nd'].add(nid)
+                        stats['addresses'] += 1
+                elif len(addr_tags):
+                    addchangeset(n, cid)
+                    changesets[cid]['nids'].add(nid)
+                    changesets[cid]['addr_chg_nd'].add(nid)
+                    stats['addresses'] += 1
+    n.clear()
+    root.clear()
 
 sys.stderr.write('finding changesets\n')
 
-for w in tree.iterfind('.//way'):
-    relevant = False
-    cid = w.get('changeset')
-    wid = w.get('id', -1)
-    if hasbuildingtag(w):
-        for nd in w.iterfind('./nd'):
-            if nd.get('ref', -2) in nids:
-                relevant = True
-                addchangeset(w, cid)
-                nid = nd.get('ref', -2)
-                changesets[cid]['nids'].add(nid)
-                changesets[cid]['wids'].add(wid)
-    if relevant:
-        stats['buildings'] += 1
-        wtags = w.findall(".//tag[@k]")
-        version = int(w.get('version'))
-        addr_tags = getaddresstags(wtags)
-        if version != 1:
-            if hasaddresschange(wid, addr_tags, version, 'way'):
-                changesets[cid]['addr_chg'].add(wid)
-                stats['addresses'] += 1
-        elif len(addr_tags):
-            changesets[cid]['addr_chg'].add(wid)
-            stats['addresses'] += 1
+# Find ways that contain nodes that were previously determined to fall within specified area
+context = iter(etree.iterparse('change.osc', events=('start', 'end')))
+event, root = context.next()
+for event, w in context:
+    if event == 'start':
+        if w.tag == 'way':
+            relevant = False
+            cid = w.get('changeset')
+            wid = w.get('id', -1)
+            
+            # Only if the way has 'building' tag
+            if hasbuildingtag(w):
+                for nd in w.iterfind('./nd'):
+                    if nd.get('ref', -2) in nids:
+                        relevant = True
+                        addchangeset(w, cid)
+                        nid = nd.get('ref', -2)
+                        changesets[cid]['nids'].add(nid)
+                        changesets[cid]['wids'].add(wid)
+            if relevant:
+                stats['buildings'] += 1
+                wtags = w.findall(".//tag[@k]")
+                version = int(w.get('version'))
+                addr_tags = getaddresstags(wtags)
+                
+                # Capture address changes
+                if version != 1:
+                    if hasaddresschange(wid, addr_tags, version, 'way'):
+                        changesets[cid]['addr_chg_way'].add(wid)
+                        stats['addresses'] += 1
+                elif len(addr_tags):
+                    changesets[cid]['addr_chg_way'].add(wid)
+                    stats['addresses'] += 1
+    w.clear()
+    root.clear()
 
 changesets = map(loadChangeset, changesets.values())
 
@@ -203,7 +223,7 @@ tmpl = """
 Changed buildings: {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}
 </p>
 <p style='font-size:14px;line-height:17px;'>
-Changed addresses: {{#addr_chg}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg}}
+Changed addresses: {{#addr_chg_nd}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nd}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}
 </p>
 </ul>
 <a href='{{map_link}}'><img src='{{map_img}}' style='border:1px solid #ccc;' /></a>
@@ -232,7 +252,7 @@ User: http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}
 Comment: {{comment}}
 
 Changed buildings: {{wids}}
-Changed addresses: {{addr_chg}}
+Changed addresses: {{addr_chg_nd}} {{addr_chg_way}}
 {{/changesets}}
 """
 
@@ -246,23 +266,22 @@ text_version = pystache.render(text_tmpl, {
     'stats': stats
 })
 
-if len(changesets) > 0:
-    now = datetime.now()
-    
-    resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messages'),
-        auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
-        data = {
-                'from': 'Change Within <changewithin@changewithin.mailgun.org>',
-                'to': json.load(open('users.json')),
-                'subject': 'OSM building and address changes %s' % now.strftime("%B %d %Y"),
-                'text': text_version,
-                "html": html_version,
-        })
+now = datetime.now()
 
-    f_out = open('osm_change_report_%s.html' % now.strftime("%m-%d-%y"), 'w')
-    f_out.write(html_version.encode('utf-8'))
-    f_out.close()
-    
-    # print resp, resp.text
+resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messages'),
+    auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
+    data = {
+            'from': 'Change Within <changewithin@changewithin.mailgun.org>',
+            'to': json.load(open('users.json')),
+            'subject': 'OSM building and address changes %s' % now.strftime("%B %d %Y"),
+            'text': text_version,
+            "html": html_version,
+    })
+
+f_out = open('osm_change_report_%s.html' % now.strftime("%m-%d-%y"), 'w')
+f_out.write(html_version.encode('utf-8'))
+f_out.close()
 
 # print html_version
+
+# print resp, resp.text
