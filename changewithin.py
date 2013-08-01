@@ -200,39 +200,42 @@ stats['total'] = len(changesets)
 if len(changesets) > 1000:
     changesets = changesets[:999]
     stats['limit_exceed'] = 'Note: For performance reasons only the first 1000 changesets are displayed.'
+    
+now = datetime.now()
 
 tmpl = """
 <div style='font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#333;max-width:600px;'>
-<h1>Summary</h1>
+<p style='float:right;'>{{date}}</p>
+<h1 style='margin-bottom:10px;'>Summary</h1>
 {{#stats}}
-<ul style='font-size:14px;line-height:17px;list-style:none;margin-left:0;padding-left:0;'>
-<li>Total changesets: {{total}}</li>
-<li>Total address changes: {{addresses}}</li>
-<li>Total building footprint changes: {{buildings}}</li>
+<ul style='font-size:15px;line-height:17px;list-style:none;margin-left:0;padding-left:0;'>
+<li>Total changesets: <strong>{{total}}</strong></li>
+<li>Total address changes: <strong>{{addresses}}</strong></li>
+<li>Total building footprint changes: <strong>{{buildings}}</strong></li>
+</ul>
 {{#limit_exceed}}
 <p style='font-size:13px;font-style:italic;'>{{limit_exceed}}</p>
 {{/limit_exceed}}
-</ul>
 {{/stats}}
 {{#changesets}}
-<h2 style='border-top:1px solid #ccc;padding-top:15px;'>Changeset <a href='http://openstreetmap.org/browse/changeset/{{id}}' style='text-decoration:none;color:#3879D9;'>#{{id}}</a></h2>
-<p style='font-size:14px;line-height:17px;'>
+<h2 style='border-bottom:1px solid #ddd;padding-top:15px;padding-bottom:8px;'>Changeset <a href='http://openstreetmap.org/browse/changeset/{{id}}' style='text-decoration:none;color:#3879D9;'>#{{id}}</a></h2>
+<p style='font-size:14px;line-height:17px;margin-bottom:20px;'>
 <a href='http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}' style='text-decoration:none;color:#3879D9;font-weight:bold;'>{{#details}}{{user}}{{/details}}</a>: {{comment}}
 </p>
-<p style='font-size:14px;line-height:17px;'>
+<p style='font-size:14px;line-height:17px;margin-bottom:0;'>
 Changed buildings: {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}
 </p>
-<p style='font-size:14px;line-height:17px;'>
+<p style='font-size:14px;line-height:17px;margin-top:5px;margin-bottom:20px;'>
 Changed addresses: {{#addr_chg_nd}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nd}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}
 </p>
-</ul>
-<a href='{{map_link}}'><img src='{{map_img}}' style='border:1px solid #ccc;' /></a>
+<a href='{{map_link}}'><img src='{{map_img}}' style='border:1px solid #ddd;' /></a>
 {{/changesets}}
 </div>
 """
 
 text_tmpl = """
 ### Summary ###
+{{date}}
 
 {{#stats}}
 Total changesets: {{total}}
@@ -258,22 +261,22 @@ Changed addresses: {{addr_chg_nd}} {{addr_chg_way}}
 
 html_version = pystache.render(tmpl, {
     'changesets': changesets,
-    'stats': stats
+    'stats': stats,
+    'date': now.strftime("%B %d, %Y")
 })
 
 text_version = pystache.render(text_tmpl, {
     'changesets': changesets,
-    'stats': stats
+    'stats': stats,
+    'date': now.strftime("%B %d, %Y")
 })
-
-now = datetime.now()
 
 resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messages'),
     auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
     data = {
             'from': 'Change Within <changewithin@changewithin.mailgun.org>',
             'to': json.load(open('users.json')),
-            'subject': 'OSM building and address changes %s' % now.strftime("%B %d %Y"),
+            'subject': 'OSM building and address changes %s' % now.strftime("%B %d, %Y"),
             'text': text_version,
             "html": html_version,
     })
