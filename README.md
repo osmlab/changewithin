@@ -5,9 +5,15 @@ with [mailgun](http://www.mailgun.com/).
 
 ## Installation
 
-Requires wget, use [homebrew](http://brew.sh/) for the simplest installation:
+Requires wget
+
+for Mac use [homebrew](http://brew.sh/):
 
     brew install wget
+
+for Ubuntu/Linux
+
+    apt-get install wget
 
 Requires Python with lxml, requests, pystache
 
