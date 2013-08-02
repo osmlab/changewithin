@@ -5,6 +5,8 @@ from sys import argv
 from sets import Set
 import pystache
 
+dir_path = os.path.dirname(os.path.abspath(__file__))
+
 def extractosc(): os.system('gunzip -f change.osc.gz')
 
 def getstate():
@@ -93,7 +95,7 @@ def loadChangeset(changeset):
     changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=15&layers=M' % (center_lat, center_lon)
     return changeset
 
-ny = json.load(open('nyc.geojson'))
+ny = json.load(open(os.path.join(dir_path,'nyc.geojson')))
 nypoly = ny['features'][0]['geometry']['coordinates'][0]
 nybox = get_bbox(nypoly)
 sys.stderr.write('getting state\n')
@@ -275,7 +277,7 @@ resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messa
     auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
     data = {
             'from': 'Change Within <changewithin@changewithin.mailgun.org>',
-            'to': json.load(open('users.json')),
+            'to': json.load(open(os.path.join(dir_path,'users.json'))),
             'subject': 'OSM building and address changes %s' % now.strftime("%B %d, %Y"),
             'text': text_version,
             "html": html_version,
