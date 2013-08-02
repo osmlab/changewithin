@@ -17,3 +17,10 @@ Requires Python with lxml, requests, pystache
 ## Running
 
     python changewithin.py
+
+## Automating
+
+Assuming the above installation, edit your [cron table](https://en.wikipedia.org/wiki/Cron) (`crontab -e`) to run the script once a day at 7:00am.
+
+    0 7 * * * ~/path/to/changewithin/bin/python ~/path/to/changewithin/changewithin.py
+
