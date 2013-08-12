@@ -3,6 +3,7 @@ from lxml import etree
 from datetime import datetime
 from sys import argv
 from sets import Set
+from ModestMaps.Geo import MercatorProjection, Location, Coordinate
 import pystache
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -50,6 +51,37 @@ def pip(lon, lat): return point_in_poly(lon, lat, nypoly)
 
 def coordAverage(c1, c2): return (float(c1) + float(c2)) / 2
 
+def getExtent(s):
+    m = MercatorProjection(0)
+
+    points = [[float(s['max_lat']), float(s['min_lon'])], [float(s['min_lat']), float(s['max_lon'])]]
+     
+    i = float('inf')
+     
+    w = 800
+    h = 600
+     
+    tl = [min(map(lambda x: x[0], points)), min(map(lambda x: x[1], points))]
+    br = [max(map(lambda x: x[0], points)), max(map(lambda x: x[1], points))]
+     
+    c1 = m.locationCoordinate(Location(tl[0], tl[1]))
+    c2 = m.locationCoordinate(Location(br[0], br[1]))
+     
+    while (abs(c1.column - c2.column) * 256.0) < w and (abs(c1.row - c2.row) * 256.0) < h:
+        c1 = c1.zoomBy(1)
+        c2 = c2.zoomBy(1)
+     
+    center = m.coordinateLocation(Coordinate(
+        (c1.row + c2.row) / 2,
+        (c1.column + c2.column) / 2,
+        c1.zoom))
+    
+    extent = {}
+    extent['lat'] = center.lat
+    extent['lon'] = center.lon
+    extent['zoom'] = c1.zoom
+    return extent
+
 def hasbuildingtag(n):
     return n.find(".//tag[@k='building']") is not None
     
@@ -89,10 +121,9 @@ def loadChangeset(changeset):
     created_by = t.find(".//tag[@k='created_by']")
     if comment is not None: changeset['comment'] = comment.get('v')
     if created_by is not None: changeset['created_by'] = created_by.get('v')
-    center_lat = coordAverage(changeset['details']['min_lat'], changeset['details']['max_lat'])
-    center_lon = coordAverage(changeset['details']['min_lon'], changeset['details']['max_lon'])
-    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/examples.map-uci7ul8p/%s,%s,15/300x225.png' % (center_lon, center_lat)
-    changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=15&layers=M' % (center_lat, center_lon)
+    extent = getExtent(changeset['details'])
+    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/examples.map-uci7ul8p/%s,%s,%s/300x225.png' % (extent['lon'], extent['lat'], extent['zoom'])
+    changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lon'], extent['lat'], extent['zoom'])
     return changeset
 
 ny = json.load(open(os.path.join(dir_path,'nyc.geojson')))
