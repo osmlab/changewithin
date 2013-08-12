@@ -17,7 +17,7 @@ for Ubuntu/Linux
 
     apt-get install wget
 
-Requires Python with lxml, requests, pystache
+Requires Python with lxml, requests, pystache, pil, modestmaps
 
     mkvirtualenv --no-site-packages changewithin
     pip install -r requirements.txt
