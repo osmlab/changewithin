@@ -1,3 +1,5 @@
 lxml==3.2.1
 pystache==0.5.3
 requests==1.2.3
+pil==1.1.7
+modestmaps==1.4.1
