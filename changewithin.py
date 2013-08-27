@@ -52,34 +52,43 @@ def pip(lon, lat): return point_in_poly(lon, lat, nypoly)
 def coordAverage(c1, c2): return (float(c1) + float(c2)) / 2
 
 def getExtent(s):
+    extent = {}
     m = MercatorProjection(0)
 
     points = [[float(s['max_lat']), float(s['min_lon'])], [float(s['min_lat']), float(s['max_lon'])]]
-     
-    i = float('inf')
-     
-    w = 800
-    h = 600
-     
-    tl = [min(map(lambda x: x[0], points)), min(map(lambda x: x[1], points))]
-    br = [max(map(lambda x: x[0], points)), max(map(lambda x: x[1], points))]
-     
-    c1 = m.locationCoordinate(Location(tl[0], tl[1]))
-    c2 = m.locationCoordinate(Location(br[0], br[1]))
-     
-    while (abs(c1.column - c2.column) * 256.0) < w and (abs(c1.row - c2.row) * 256.0) < h:
-        c1 = c1.zoomBy(1)
-        c2 = c2.zoomBy(1)
-     
-    center = m.coordinateLocation(Coordinate(
-        (c1.row + c2.row) / 2,
-        (c1.column + c2.column) / 2,
-        c1.zoom))
     
-    extent = {}
-    extent['lat'] = center.lat
-    extent['lon'] = center.lon
-    extent['zoom'] = c1.zoom
+    if (points[0][0] - points[1][0] == 0) or (points[1][1] - points[0][1] == 0):
+        extent['lat'] = points[0][0]
+        extent['lon'] = points[1][1]
+        extent['zoom'] = 18
+    else:
+        i = float('inf')
+         
+        w = 800
+        h = 600
+         
+        tl = [min(map(lambda x: x[0], points)), min(map(lambda x: x[1], points))]
+        br = [max(map(lambda x: x[0], points)), max(map(lambda x: x[1], points))]
+         
+        c1 = m.locationCoordinate(Location(tl[0], tl[1]))
+        c2 = m.locationCoordinate(Location(br[0], br[1]))
+         
+        while (abs(c1.column - c2.column) * 256.0) < w and (abs(c1.row - c2.row) * 256.0) < h:
+            c1 = c1.zoomBy(1)
+            c2 = c2.zoomBy(1)
+         
+        center = m.coordinateLocation(Coordinate(
+            (c1.row + c2.row) / 2,
+            (c1.column + c2.column) / 2,
+            c1.zoom))
+        
+        extent['lat'] = center.lat
+        extent['lon'] = center.lon
+        if c1.zoom > 18:
+            extent['zoom'] = 18
+        else:
+            extent['zoom'] = c1.zoom
+        
     return extent
 
 def hasbuildingtag(n):
