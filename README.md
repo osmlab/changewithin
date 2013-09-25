@@ -7,19 +7,32 @@ The one file that will require editing is [users.json](https://github.com/osmlab
 
 ## Installation
 
-Requires wget
+Requires [wget](http://www.gnu.org/software/wget/).
 
 for Mac use [homebrew](http://brew.sh/):
 
     brew install wget
 
-for Ubuntu/Linux
+for Ubuntu/Linux:
 
     apt-get install wget
 
-Requires Python with lxml, requests, pystache, pil, modestmaps
+Requires Python with [lxml](http://lxml.de/), [requests](http://docs.python-requests.org/),
+[pystache](http://defunkt.io/pystache/), [PIL](http://effbot.org/imagingbook/),
+and [ModestMaps](https://github.com/stamen/modestmaps-py).
 
-    mkvirtualenv --no-site-packages changewithin
+Optionally [set up virtualenv](http://www.virtualenv.org/en/latest/#usage):
+
+    virtualenv --no-site-packages venv-changewithin
+    source venv-changewithin/bin/activate
+
+Install libraries needed for fast XML processing and Python extensions.
+For Ubuntu/Linux:
+
+    apt-get install python-dev libxml2-dev libxslt1-dev
+
+Install Python packages:
+    
     pip install -r requirements.txt
 
 ## Running
