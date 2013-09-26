@@ -15,7 +15,11 @@ def getstate():
     return r.text.split('\n')[1].split('=')[1]
 
 def getosc(state):
-    stateurl = 'http://planet.openstreetmap.org/replication/day/000/000/%s.osc.gz' % state
+    # zero-pad state so it can be safely split.
+    state = '000000000' + state
+    path = '%s/%s/%s' % (state[-9:-6], state[-6:-3], state[-3:])
+
+    stateurl = 'http://planet.openstreetmap.org/replication/day/%s.osc.gz' % path
     sys.stderr.write('downloading %s...\n' % stateurl)
     os.system('wget --quiet %s -O change.osc.gz' % stateurl)
 
