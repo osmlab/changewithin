@@ -2,7 +2,6 @@ import time, json, requests, os, sys
 from ConfigParser import ConfigParser
 from lxml import etree
 from datetime import datetime
-from sets import Set
 import pystache
 
 from lib import (
@@ -46,7 +45,7 @@ osc_file = getosc()
 
 sys.stderr.write('reading file\n')
 
-nids = Set()
+nids = set()
 changesets = {}
 stats = {}
 stats['buildings'] = 0

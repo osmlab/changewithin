@@ -159,10 +159,10 @@ def addchangeset(el, cid, changesets):
             'id': cid,
             'user': el.get('user'),
             'uid': el.get('uid'),
-            'wids': Set(),
-            'nids': Set(),
-            'addr_chg_way': Set(),
-            'addr_chg_nd': Set()
+            'wids': set(),
+            'nids': set(),
+            'addr_chg_way': set(),
+            'addr_chg_nd': set()
         }
 
 #
