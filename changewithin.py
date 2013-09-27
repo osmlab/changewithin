@@ -7,7 +7,8 @@ import pystache
 
 from lib import (
     extractosc, get_bbox, getstate, getosc, point_in_box, point_in_poly,
-    hasbuildingtag, getaddresstags, hasaddresschange, loadChangeset
+    hasbuildingtag, getaddresstags, hasaddresschange, loadChangeset,
+    addchangeset, html_tmpl, text_tmpl
     )
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -61,18 +62,6 @@ stats = {}
 stats['buildings'] = 0
 stats['addresses'] = 0
 
-def addchangeset(el, cid):
-    if not changesets.get(cid, False):
-        changesets[cid] = {
-            'id': cid,
-            'user': el.get('user'),
-            'uid': el.get('uid'),
-            'wids': Set(),
-            'nids': Set(),
-            'addr_chg_way': Set(),
-            'addr_chg_nd': Set()
-        }
-
 sys.stderr.write('finding points\n')
 
 # Find nodes that fall within specified area
@@ -94,12 +83,12 @@ for event, n in context:
                 # Capture address changes
                 if version != 1:
                     if hasaddresschange(nid, addr_tags, version, 'node'):
-                        addchangeset(n, cid)
+                        addchangeset(n, cid, changesets)
                         changesets[cid]['nids'].add(nid)
                         changesets[cid]['addr_chg_nd'].add(nid)
                         stats['addresses'] += 1
                 elif len(addr_tags):
-                    addchangeset(n, cid)
+                    addchangeset(n, cid, changesets)
                     changesets[cid]['nids'].add(nid)
                     changesets[cid]['addr_chg_nd'].add(nid)
                     stats['addresses'] += 1
@@ -123,7 +112,7 @@ for event, w in context:
                 for nd in w.iterfind('./nd'):
                     if nd.get('ref', -2) in nids:
                         relevant = True
-                        addchangeset(w, cid)
+                        addchangeset(w, cid, changesets)
                         nid = nd.get('ref', -2)
                         changesets[cid]['nids'].add(nid)
                         changesets[cid]['wids'].add(wid)
@@ -154,63 +143,7 @@ if len(changesets) > 1000:
     
 now = datetime.now()
 
-tmpl = """
-<div style='font-family:"Helvetica Neue",Helvetica,Arial,sans-serif;color:#333;max-width:600px;'>
-<p style='float:right;'>{{date}}</p>
-<h1 style='margin-bottom:10px;'>Summary</h1>
-{{#stats}}
-<ul style='font-size:15px;line-height:17px;list-style:none;margin-left:0;padding-left:0;'>
-<li>Total changesets: <strong>{{total}}</strong></li>
-<li>Total address changes: <strong>{{addresses}}</strong></li>
-<li>Total building footprint changes: <strong>{{buildings}}</strong></li>
-</ul>
-{{#limit_exceed}}
-<p style='font-size:13px;font-style:italic;'>{{limit_exceed}}</p>
-{{/limit_exceed}}
-{{/stats}}
-{{#changesets}}
-<h2 style='border-bottom:1px solid #ddd;padding-top:15px;padding-bottom:8px;'>Changeset <a href='http://openstreetmap.org/browse/changeset/{{id}}' style='text-decoration:none;color:#3879D9;'>#{{id}}</a></h2>
-<p style='font-size:14px;line-height:17px;margin-bottom:20px;'>
-<a href='http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}' style='text-decoration:none;color:#3879D9;font-weight:bold;'>{{#details}}{{user}}{{/details}}</a>: {{comment}}
-</p>
-<p style='font-size:14px;line-height:17px;margin-bottom:0;'>
-Changed buildings: {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}
-</p>
-<p style='font-size:14px;line-height:17px;margin-top:5px;margin-bottom:20px;'>
-Changed addresses: {{#addr_chg_nd}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nd}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}
-</p>
-<a href='{{map_link}}'><img src='{{map_img}}' style='border:1px solid #ddd;' /></a>
-{{/changesets}}
-</div>
-"""
-
-text_tmpl = """
-### Summary ###
-{{date}}
-
-{{#stats}}
-Total changesets: {{total}}
-Total building footprint changes: {{buildings}}
-Total address changes: {{addresses}}
-{{#limit_exceed}}
-
-{{limit_exceed}}
-
-{{/limit_exceed}}
-{{/stats}}
-
-{{#changesets}}
---- Changeset #{{id}} ---
-URL: http://openstreetmap.org/browse/changeset/{{id}}
-User: http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}
-Comment: {{comment}}
-
-Changed buildings: {{wids}}
-Changed addresses: {{addr_chg_nd}} {{addr_chg_way}}
-{{/changesets}}
-"""
-
-html_version = pystache.render(tmpl, {
+html_version = pystache.render(html_tmpl, {
     'changesets': changesets,
     'stats': stats,
     'date': now.strftime("%B %d, %Y")
