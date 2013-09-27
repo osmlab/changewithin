@@ -16,11 +16,14 @@ dir_path = os.path.dirname(os.path.abspath(__file__))
 # Configure for use. See config.ini for details.
 #
 config = ConfigParser()
-config.read('config.ini')
+config.read(os.path.join(dir_path, 'config.ini'))
 
 #
-# Email environment variables override config file.
+# Environment variables override config file.
 #
+if 'AREA_GEOJSON' in os.environ:
+    config.set('area', 'geojson', os.environ['AREA_GEOJSON'])
+
 if 'MAILGUN_DOMAIN' in os.environ:
     config.set('mailgun', 'domain', os.environ['MAILGUN_DOMAIN'])
 
@@ -38,12 +41,12 @@ elif not config.has_option('email', 'recipients'):
     config.set('email', 'recipients', ' '.join(recipients))
 
 #
-# Get started!
+# Get started with the area of interest (AOI).
 #
 
-ny = json.load(open(os.path.join(dir_path,'nyc.geojson')))
-nypoly = ny['features'][0]['geometry']['coordinates'][0]
-nybox = get_bbox(nypoly)
+aoi = json.load(open(os.path.join(dir_path, config.get('area', 'geojson'))))
+aoi_poly = aoi['features'][0]['geometry']['coordinates'][0]
+aoi_box = get_bbox(aoi_poly)
 sys.stderr.write('getting state\n')
 state = getstate()
 getosc(state)
@@ -80,7 +83,7 @@ for event, n in context:
         if n.tag == 'node':
             lon = float(n.get('lon', 0))
             lat = float(n.get('lat', 0))
-            if point_in_box(lon, lat, nybox) and point_in_poly(lon, lat, nypoly):
+            if point_in_box(lon, lat, aoi_box) and point_in_poly(lon, lat, aoi_poly):
                 cid = n.get('changeset')
                 nid = n.get('id', -1)
                 nids.add(nid)
