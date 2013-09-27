@@ -7,15 +7,19 @@ The one file that will require editing is [users.json](https://github.com/osmlab
 
 ## Installation
 
-Requires [wget](http://www.gnu.org/software/wget/).
+Requires [wget](http://www.gnu.org/software/wget/) or [cURL ](http://curl.haxx.se/).
 
-for Mac use [homebrew](http://brew.sh/):
+cURL typically comes pre-installed.
+
+For Mac use [homebrew](http://brew.sh/) and one of:
 
     brew install wget
+    brew install curl
 
-for Ubuntu/Linux:
+For Ubuntu/Linux one of:
 
     apt-get install wget
+    apt-get install curl
 
 Requires Python with [lxml](http://lxml.de/), [requests](http://docs.python-requests.org/),
 [pystache](http://defunkt.io/pystache/), [PIL](http://effbot.org/imagingbook/),

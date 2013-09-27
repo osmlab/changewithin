@@ -25,7 +25,13 @@ def getosc():
 
     stateurl = 'http://planet.openstreetmap.org/replication/day/%s.osc.gz' % path
     sys.stderr.write('downloading %s...\n' % stateurl)
-    os.system('wget --quiet %s -O %s' % (stateurl, filename))
+    status = os.system('wget --quiet %s -O %s' % (stateurl, filename))
+    
+    if status:
+        status = os.system('curl --silent %s -o %s' % (stateurl, filename))
+    
+    if status:
+        raise Exception('Failure from both wget and curl')
     
     sys.stderr.write('extracting %s...\n' % filename)
     os.system('gunzip -f %s' % filename)
