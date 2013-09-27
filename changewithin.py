@@ -1,4 +1,5 @@
 import time, json, requests, os, sys
+from ConfigParser import ConfigParser
 from lxml import etree
 from datetime import datetime
 from sets import Set
@@ -10,6 +11,35 @@ from lib import (
     )
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
+
+#
+# Configure for use. See config.ini for details.
+#
+config = ConfigParser()
+config.read('config.ini')
+
+#
+# Email environment variables override config file.
+#
+if 'MAILGUN_DOMAIN' in os.environ:
+    config.set('mailgun', 'domain', os.environ['MAILGUN_DOMAIN'])
+
+if 'MAILGUN_API_KEY' in os.environ:
+    config.set('mailgun', 'api_key', os.environ['MAILGUN_API_KEY'])
+
+if 'EMAIL_RECIPIENTS' in os.environ:
+    config.set('email', 'recipients', os.environ['EMAIL_RECIPIENTS'])
+
+elif not config.has_option('email', 'recipients'):
+    #
+    # Missing recipients fall back to original users.json contents.
+    #
+    recipients = json.load(open(os.path.join(dir_path, 'users.json')))
+    config.set('email', 'recipients', ' '.join(recipients))
+
+#
+# Get started!
+#
 
 ny = json.load(open(os.path.join(dir_path,'nyc.geojson')))
 nypoly = ny['features'][0]['geometry']['coordinates'][0]
@@ -189,11 +219,11 @@ text_version = pystache.render(text_tmpl, {
     'date': now.strftime("%B %d, %Y")
 })
 
-resp = requests.post(('https://api.mailgun.net/v2/changewithin.mailgun.org/messages'),
-    auth = ('api', 'key-7y2k6qu8-qq1w78o1ow1ms116pkn31j7'),
+resp = requests.post(('https://api.mailgun.net/v2/%s/messages' % config.get('mailgun', 'domain')),
+    auth = ('api', config.get('mailgun', 'api_key')),
     data = {
-            'from': 'Change Within <changewithin@changewithin.mailgun.org>',
-            'to': json.load(open(os.path.join(dir_path,'users.json'))),
+            'from': 'Change Within <changewithin@%s>' % config.get('mailgun', 'domain'),
+            'to': config.get('email', 'recipients').split(),
             'subject': 'OSM building and address changes %s' % now.strftime("%B %d, %Y"),
             'text': text_version,
             "html": html_version,
