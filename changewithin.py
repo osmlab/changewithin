@@ -34,13 +34,6 @@ if 'MAILGUN_API_KEY' in os.environ:
 if 'EMAIL_RECIPIENTS' in os.environ:
     config.set('email', 'recipients', os.environ['EMAIL_RECIPIENTS'])
 
-elif not config.has_option('email', 'recipients'):
-    #
-    # Missing recipients fall back to original users.json contents.
-    #
-    recipients = json.load(open(os.path.join(dir_path, 'users.json')))
-    config.set('email', 'recipients', ' '.join(recipients))
-
 #
 # Get started with the area of interest (AOI).
 #
