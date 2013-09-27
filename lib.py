@@ -4,23 +4,34 @@ import time, json, requests, os, sys
 from lxml import etree
 from sets import Set
 from ModestMaps.Geo import MercatorProjection, Location, Coordinate
+from tempfile import mkstemp
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
-
-def extractosc(): os.system('gunzip -f change.osc.gz')
 
 def getstate():
     r = requests.get('http://planet.openstreetmap.org/replication/day/state.txt')
     return r.text.split('\n')[1].split('=')[1]
 
-def getosc(state):
+def getosc():
+    state = getstate()
+
     # zero-pad state so it can be safely split.
     state = '000000000' + state
     path = '%s/%s/%s' % (state[-9:-6], state[-6:-3], state[-3:])
+    
+    # prepare a local file to store changes
+    handle, filename = mkstemp(prefix='change-', suffix='.osc.gz')
+    os.close(handle)
 
     stateurl = 'http://planet.openstreetmap.org/replication/day/%s.osc.gz' % path
     sys.stderr.write('downloading %s...\n' % stateurl)
-    os.system('wget --quiet %s -O change.osc.gz' % stateurl)
+    os.system('wget --quiet %s -O %s' % (stateurl, filename))
+    
+    sys.stderr.write('extracting %s...\n' % filename)
+    os.system('gunzip -f %s' % filename)
+
+    # knock off the ".gz" suffix and return
+    return filename[:-3]
 
 def get_bbox(poly):
     box = [200, 200, -200, -200]

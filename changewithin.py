@@ -6,7 +6,7 @@ from sets import Set
 import pystache
 
 from lib import (
-    extractosc, get_bbox, getstate, getosc, point_in_box, point_in_poly,
+    get_bbox, getstate, getosc, point_in_box, point_in_poly,
     hasbuildingtag, getaddresstags, hasaddresschange, loadChangeset,
     addchangeset, html_tmpl, text_tmpl
     )
@@ -49,10 +49,7 @@ aoi = json.load(open(os.path.join(dir_path, config.get('area', 'geojson'))))
 aoi_poly = aoi['features'][0]['geometry']['coordinates'][0]
 aoi_box = get_bbox(aoi_poly)
 sys.stderr.write('getting state\n')
-state = getstate()
-getosc(state)
-sys.stderr.write('extracting\n')
-extractosc()
+osc_file = getosc()
 
 sys.stderr.write('reading file\n')
 
@@ -65,7 +62,7 @@ stats['addresses'] = 0
 sys.stderr.write('finding points\n')
 
 # Find nodes that fall within specified area
-context = iter(etree.iterparse('change.osc', events=('start', 'end')))
+context = iter(etree.iterparse(osc_file, events=('start', 'end')))
 event, root = context.next()
 for event, n in context:
     if event == 'start':
@@ -98,7 +95,7 @@ for event, n in context:
 sys.stderr.write('finding changesets\n')
 
 # Find ways that contain nodes that were previously determined to fall within specified area
-context = iter(etree.iterparse('change.osc', events=('start', 'end')))
+context = iter(etree.iterparse(osc_file, events=('start', 'end')))
 event, root = context.next()
 for event, w in context:
     if event == 'start':
@@ -168,6 +165,8 @@ resp = requests.post(('https://api.mailgun.net/v2/%s/messages' % config.get('mai
 f_out = open('osm_change_report_%s.html' % now.strftime("%m-%d-%y"), 'w')
 f_out.write(html_version.encode('utf-8'))
 f_out.close()
+
+os.unlink(osc_file)
 
 # print html_version
 
