@@ -37,7 +37,17 @@ if 'EMAIL_RECIPIENTS' in os.environ:
 # Get started with the area of interest (AOI).
 #
 
-aoi = json.load(open(os.path.join(dir_path, config.get('area', 'geojson'))))
+aoi_href = config.get('area', 'geojson')
+aoi_file = os.path.join(dir_path, aoi_href)
+
+if os.path.exists(aoi_file):
+    # normal file, available locally
+    aoi = json.load(open(aoi_file))
+
+else:
+    # possible remote file, try to request it
+    aoi = requests.get(aoi_href).json()
+
 aoi_poly = aoi['features'][0]['geometry']['coordinates'][0]
 aoi_box = get_bbox(aoi_poly)
 sys.stderr.write('getting state\n')
