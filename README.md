@@ -27,11 +27,11 @@ of these Census lookup tools:
 
 Each GEOID combines the state FIPS code (two digits) and
 [ANSI code](http://www.census.gov/geo/reference/ansi.html).
-For example, to find the GEOID of New York City, find New York State via the
-[Place Lookup page](http://www.census.gov/geo/reference/codes/placelookup.html)
-above and look for "New York City" on the page. Its ANSI code is 51000, and New
-York's state FIPS code is 36. Therefore, New York City's GEOID is 3651000 and
-its GeoJSON URL is:
+For example, to find the GEOID of New York City, select New York State via the
+[Place Lookup tool](http://www.census.gov/geo/reference/codes/placelookup.html)
+above and look for "New York City" [on the page](http://www.census.gov/geo/reference/codes/data/place/3600000.html).
+Its ANSI code is 51000 and New York's state FIPS code is 36. Therefore, New
+York City's GEOID is 3651000 and its GeoJSON URL is:
 
 * http://forever.codeforamerica.org/Census-API/by-geoid/3651000.json
 
