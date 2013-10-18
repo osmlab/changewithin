@@ -150,7 +150,7 @@ def loadChangeset(changeset):
     if created_by is not None: changeset['created_by'] = created_by.get('v')
     extent = getExtent(changeset['details'])
     changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/%s,%s,%s/300x225.png' % (extent['lon'], extent['lat'], extent['zoom'])
-    changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lon'], extent['lat'], extent['zoom'])
+    changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lat'], extent['lon'], extent['zoom'])
     return changeset
 
 def addchangeset(el, cid, changesets):
