@@ -151,6 +151,8 @@ def loadChangeset(changeset):
     extent = getExtent(changeset['details'])
     changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/%s,%s,%s/300x225.png' % (extent['lon'], extent['lat'], extent['zoom'])
     changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lat'], extent['lon'], extent['zoom'])
+    changeset['addr_count'] = len(changeset['addr_chg_way']) + len(changeset['addr_chg_nd'])
+    changeset['bldg_count'] = len(changeset['wids'])
     return changeset
 
 def addchangeset(el, cid, changesets):
@@ -189,10 +191,10 @@ html_tmpl = '''
 <a href='http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}' style='text-decoration:none;color:#3879D9;font-weight:bold;'>{{#details}}{{user}}{{/details}}</a>: {{comment}}
 </p>
 <p style='font-size:14px;line-height:17px;margin-bottom:0;'>
-Changed buildings: {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}
+{{#bldg_count}}Changed buildings ({{bldg_count}}): {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}{{/bldg_count}}
 </p>
 <p style='font-size:14px;line-height:17px;margin-top:5px;margin-bottom:20px;'>
-Changed addresses: {{#addr_chg_nd}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nd}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}
+{{#addr_count}}Changed addresses ({{addr_count}}): {{#addr_chg_nd}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nd}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}{{/addr_count}}
 </p>
 <a href='{{map_link}}'><img src='{{map_img}}' style='border:1px solid #ddd;' /></a>
 {{/changesets}}
@@ -220,7 +222,7 @@ URL: http://openstreetmap.org/browse/changeset/{{id}}
 User: http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}
 Comment: {{comment}}
 
-Changed buildings: {{wids}}
-Changed addresses: {{addr_chg_nd}} {{addr_chg_way}}
+{{#bldg_count}}Changed buildings ({{bldg_count}}): {{wids}}{{/bldg_count}}
+{{#addr_count}}Changed addresses ({{addr_count}}): {{addr_chg_nd}} {{addr_chg_way}}{{/addr_count}}
 {{/changesets}}
 '''
