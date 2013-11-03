@@ -22,13 +22,13 @@ counties are available from [Code for America](http://codeforamerica.org),
 referenced by GEOID. To find the GEOID for a county or place, start with one
 of these Census lookup tools:
 
-* http://www.census.gov/geo/reference/codes/countylookup.html
-* http://www.census.gov/geo/reference/codes/placelookup.html
+* http://www.census.gov/geo/reference/codes/cou.html (Counties)
+* http://www.census.gov/geo/reference/codes/place.html (Places)
 
 Each GEOID combines the state FIPS code (two digits) and
 [ANSI code](http://www.census.gov/geo/reference/ansi.html).
 For example, to find the GEOID of New York City, select New York State via the
-[Place Lookup tool](http://www.census.gov/geo/reference/codes/placelookup.html)
+[Place Lookup tool](http://www.census.gov/geo/reference/codes/place.html)
 above and look for "New York City" [on the page](http://www.census.gov/geo/reference/codes/data/place/3600000.html).
 Its ANSI code is 51000 and New York's state FIPS code is 36. Therefore, New
 York City's GEOID is 3651000 and its GeoJSON URL is:
