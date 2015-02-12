@@ -1,6 +1,6 @@
 # Changewithin
 
-*Subscribe to daily emails of changes to buildings and addresses on OpenStreetMap.*
+*Daily emails of changes to buildings and addresses on OpenStreetMap.*
 
 changewithin is a simple script that pulls [daily changes](http://planet.openstreetmap.org/)
 from OpenStreetMap with `requests`, parses them with `lxml`, finds the ones that are inside
