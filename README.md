@@ -75,6 +75,8 @@ Install Python packages:
     
     pip install -r requirements.txt
 
+Copy config-example.ini to config.ini and configure area of interest under `[area]` and email recipients under `[email]`.
+
 ## Running
 
     python changewithin.py
