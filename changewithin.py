@@ -8,7 +8,7 @@ import argparse
 from lib import (
     get_bbox, getstate, getosc, point_in_box, point_in_poly,
     hasbuildingtag, getaddresstags, hasaddresschange, loadChangeset,
-    addchangeset, html_tmpl, text_tmpl
+    addchangeset, addnode, html_tmpl, text_tmpl
     )
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -67,7 +67,7 @@ else:
 
 sys.stderr.write('reading file\n')
 
-nids = set()
+nodes = {}
 changesets = {}
 stats = {}
 stats['buildings'] = 0
@@ -86,7 +86,7 @@ for event, n in context:
             if point_in_box(lon, lat, aoi_box) and point_in_poly(lon, lat, aoi_poly):
                 cid = n.get('changeset')
                 nid = n.get('id', -1)
-                nids.add(nid)
+                addnode(n, nid, nodes)
                 ntags = n.findall(".//tag[@k]")
                 addr_tags = getaddresstags(ntags)
                 version = int(n.get('version'))
@@ -95,13 +95,13 @@ for event, n in context:
                 if version != 1:
                     if hasaddresschange(nid, addr_tags, version, 'node'):
                         addchangeset(n, cid, changesets)
-                        changesets[cid]['nids'].add(nid)
-                        changesets[cid]['addr_chg_nd'].add(nid)
+                        changesets[cid]['nodes'][nid] = nodes[nid]
+                        changesets[cid]['addr_chg_nd'][nid] = nodes[nid]
                         stats['addresses'] += 1
                 elif len(addr_tags):
                     addchangeset(n, cid, changesets)
-                    changesets[cid]['nids'].add(nid)
-                    changesets[cid]['addr_chg_nd'].add(nid)
+                    changesets[cid]['nodes'][nid] = nodes[nid]
+                    changesets[cid]['addr_chg_nd'][nid] = nodes[nid]
                     stats['addresses'] += 1
     n.clear()
     root.clear()
@@ -121,11 +121,11 @@ for event, w in context:
             # Only if the way has 'building' tag
             if hasbuildingtag(w):
                 for nd in w.iterfind('./nd'):
-                    if nd.get('ref', -2) in nids:
+                    if nd.get('ref', -2) in nodes.keys():
                         relevant = True
                         addchangeset(w, cid, changesets)
                         nid = nd.get('ref', -2)
-                        changesets[cid]['nids'].add(nid)
+                        changesets[cid]['nodes'][nid] = nodes[nid]
                         changesets[cid]['wids'].add(wid)
             if relevant:
                 stats['buildings'] += 1

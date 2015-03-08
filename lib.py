@@ -1,6 +1,7 @@
 ''' Support functions for changewithin.py script.
 '''
 import time, json, requests, os, sys
+import urllib
 from lxml import etree
 from sets import Set
 from ModestMaps.Geo import MercatorProjection, Location, Coordinate
@@ -136,9 +137,10 @@ def hasaddresschange(gid, addr, version, elem):
 
 def loadChangeset(changeset):
     changeset['wids'] = list(changeset['wids'])
-    changeset['nids'] = list(changeset['nids'])
-    changeset['addr_chg_nd'] = list(changeset['addr_chg_nd'])
+    changeset['nids'] = changeset['nodes'].keys()
+    changeset['addr_chg_nids'] = changeset['addr_chg_nd'].keys()
     changeset['addr_chg_way'] = list(changeset['addr_chg_way'])
+    geoms = geometries(changeset['nodes'])
     url = 'http://api.openstreetmap.org/api/0.6/changeset/%s' % changeset['id']
     r = requests.get(url)
     if not r.text: return changeset
@@ -149,9 +151,9 @@ def loadChangeset(changeset):
     if comment is not None: changeset['comment'] = comment.get('v')
     if created_by is not None: changeset['created_by'] = created_by.get('v')
     extent = getExtent(changeset['details'])
-    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/%s,%s,%s/300x225.png' % (extent['lon'], extent['lat'], extent['zoom'])
+    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(geoms)), extent['lon'], extent['lat'], extent['zoom'])
     changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lat'], extent['lon'], extent['zoom'])
-    changeset['addr_count'] = len(changeset['addr_chg_way']) + len(changeset['addr_chg_nd'])
+    changeset['addr_count'] = len(changeset['addr_chg_way']) + len(changeset['addr_chg_nids'])
     changeset['bldg_count'] = len(changeset['wids'])
     return changeset
 
@@ -162,10 +164,44 @@ def addchangeset(el, cid, changesets):
             'user': el.get('user'),
             'uid': el.get('uid'),
             'wids': set(),
-            'nids': set(),
+            'nodes': {},
             'addr_chg_way': set(),
-            'addr_chg_nd': set()
+            'addr_chg_nd': {}
         }
+
+def addnode(el, nid, nodes):
+    if not nodes.get(nid, False):
+        nodes[nid] = {
+            'id': nid,
+            'lat': el.get('lat'),
+            'lon': el.get('lon')
+        }
+
+def point(lat, lon):
+    return {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+        "type": "Point",
+        "coordinates": [float(lon), float(lat)]
+      }
+    }
+
+def polygon(coords):
+    return {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [coords]
+      }
+    }
+
+def geometries(nodes):
+    collection = {"type": "FeatureCollection", "features": []}
+    for node in nodes.values():
+        collection["features"].append(point(node["lat"], node["lon"]))
+    return collection
 
 #
 # Templates for generated emails.
@@ -194,7 +230,7 @@ html_tmpl = '''
 {{#bldg_count}}Changed buildings ({{bldg_count}}): {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}{{/bldg_count}}
 </p>
 <p style='font-size:14px;line-height:17px;margin-top:5px;margin-bottom:20px;'>
-{{#addr_count}}Changed addresses ({{addr_count}}): {{#addr_chg_nd}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nd}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}{{/addr_count}}
+{{#addr_count}}Changed addresses ({{addr_count}}): {{#addr_chg_nids}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nids}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}{{/addr_count}}
 </p>
 <a href='{{map_link}}'><img src='{{map_img}}' style='border:1px solid #ddd;' /></a>
 {{/changesets}}
@@ -223,6 +259,6 @@ User: http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}
 Comment: {{comment}}
 
 {{#bldg_count}}Changed buildings ({{bldg_count}}): {{wids}}{{/bldg_count}}
-{{#addr_count}}Changed addresses ({{addr_count}}): {{addr_chg_nd}} {{addr_chg_way}}{{/addr_count}}
+{{#addr_count}}Changed addresses ({{addr_count}}): {{addr_chg_nids}} {{addr_chg_way}}{{/addr_count}}
 {{/changesets}}
 '''
