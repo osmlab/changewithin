@@ -213,7 +213,7 @@ def extract_coords(gjson):
         if f['geometry']['type'] == 'Polygon':
             for c in f['geometry']['coordinates']:
                 coords.extend(c)
-        elif f['geometry']['type'] == 'Multipoint':
+        elif f['geometry']['type'] == 'MultiPoint':
             coords.extend(f['geometry']['coordinates'])
         elif f['type'] == 'Point':
             coords.append(f['geometry']['coordinates'])
