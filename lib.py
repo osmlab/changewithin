@@ -70,12 +70,22 @@ def point_in_poly(x, y, poly):
 
 def coordAverage(c1, c2): return (float(c1) + float(c2)) / 2
 
-def getExtent(s):
+def getExtent(nodes):
     extent = {}
     m = MercatorProjection(0)
 
-    points = [[float(s['max_lat']), float(s['min_lon'])], [float(s['min_lat']), float(s['max_lon'])]]
-    
+    max_lon = -180
+    min_lon = 180
+    max_lat = -90
+    min_lat = 90
+    for node in nodes.values():
+        if (max_lon < node['lon']): max_lon = node['lon']
+        if (min_lon > node['lon']): min_lon = node['lon']
+        if (max_lat < node['lat']): max_lat = node['lat']
+        if (min_lat > node['lat']): min_lat = node['lat']
+
+    points = [[max_lat, min_lon], [min_lat, max_lon]]
+
     if (points[0][0] - points[1][0] == 0) or (points[1][1] - points[0][1] == 0):
         extent['lat'] = points[0][0]
         extent['lon'] = points[1][1]
@@ -145,12 +155,11 @@ def loadChangeset(changeset):
     r = requests.get(url)
     if not r.text: return changeset
     t = etree.fromstring(r.text.encode('utf-8'))
-    changeset['details'] = dict(t.find('.//changeset').attrib)
     comment = t.find(".//tag[@k='comment']")
     created_by = t.find(".//tag[@k='created_by']")
     if comment is not None: changeset['comment'] = comment.get('v')
     if created_by is not None: changeset['created_by'] = created_by.get('v')
-    extent = getExtent(changeset['details'])
+    extent = getExtent(changeset['nodes'])
     changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(geoms)), extent['lon'], extent['lat'], extent['zoom'])
     changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lat'], extent['lon'], extent['zoom'])
     changeset['addr_count'] = len(changeset['addr_chg_way']) + len(changeset['addr_chg_nids'])
@@ -173,8 +182,8 @@ def addnode(el, nid, nodes):
     if not nodes.get(nid, False):
         nodes[nid] = {
             'id': nid,
-            'lat': el.get('lat'),
-            'lon': el.get('lon')
+            'lat': float(el.get('lat')),
+            'lon': float(el.get('lon'))
         }
 
 def point(lat, lon):
@@ -183,7 +192,7 @@ def point(lat, lon):
       "properties": {},
       "geometry": {
         "type": "Point",
-        "coordinates": [float(lon), float(lat)]
+        "coordinates": [lon, lat]
       }
     }
 
@@ -216,8 +225,8 @@ def geometries(nodes, wids):
         for n in e.findall(".//node"):
             coords.append([float(n.get('lon')), float(n.get('lat'))])
         if len(coords):
-            coords.append([coords[0][0], coords[0][1]])
-            collection["features"].append(polygon(coords))
+            coords.append(coords[0])
+            collection["features"].append(polygon([coords]))
 
     for node in nodes.values():
         collection["features"].append(point(node["lat"], node["lon"]))
