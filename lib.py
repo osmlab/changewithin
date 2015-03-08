@@ -140,7 +140,7 @@ def loadChangeset(changeset):
     changeset['nids'] = changeset['nodes'].keys()
     changeset['addr_chg_nids'] = changeset['addr_chg_nd'].keys()
     changeset['addr_chg_way'] = list(changeset['addr_chg_way'])
-    geoms = geometries(changeset['nodes'])
+    geoms = geometries(changeset['nodes'], changeset['wids'])
     url = 'http://api.openstreetmap.org/api/0.6/changeset/%s' % changeset['id']
     r = requests.get(url)
     if not r.text: return changeset
@@ -193,12 +193,32 @@ def polygon(coords):
       "properties": {},
       "geometry": {
         "type": "Polygon",
-        "coordinates": [coords]
+        "coordinates": coords
       }
     }
 
-def geometries(nodes):
+def geometries(nodes, wids):
     collection = {"type": "FeatureCollection", "features": []}
+    for wid in wids:
+        query = '''
+            [out:xml][timeout:25];
+            (
+              way(%s);
+            );
+            out body;
+            >;
+            out skel qt;
+        '''
+        r = requests.post('http://overpass-api.de/api/interpreter', data=(query % wid))
+        if not r.text: continue
+        e = etree.fromstring(r.text.encode('utf-8'))
+        coords = []
+        for n in e.findall(".//node"):
+            coords.append([float(n.get('lon')), float(n.get('lat'))])
+        if len(coords):
+            coords.append([coords[0][0], coords[0][1]])
+            collection["features"].append(polygon(coords))
+
     for node in nodes.values():
         collection["features"].append(point(node["lat"], node["lon"]))
     return collection
