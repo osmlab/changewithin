@@ -13,21 +13,21 @@ def getstate():
     r = requests.get('http://planet.openstreetmap.org/replication/day/state.txt')
     return r.text.split('\n')[1].split('=')[1]
 
-def getosc():
-    state = getstate()
+def getosc(stateurl=None):
+    if not stateurl:
+        state = getstate()
 
-    # zero-pad state so it can be safely split.
-    state = '000000000' + state
-    path = '%s/%s/%s' % (state[-9:-6], state[-6:-3], state[-3:])
-    
+        # zero-pad state so it can be safely split.
+        state = '000000000' + state
+        path = '%s/%s/%s' % (state[-9:-6], state[-6:-3], state[-3:])
+        stateurl = 'http://planet.openstreetmap.org/replication/day/%s.osc.gz' % path
+
+    sys.stderr.write('downloading %s...\n' % stateurl)
     # prepare a local file to store changes
     handle, filename = mkstemp(prefix='change-', suffix='.osc.gz')
     os.close(handle)
-
-    stateurl = 'http://planet.openstreetmap.org/replication/day/%s.osc.gz' % path
-    sys.stderr.write('downloading %s...\n' % stateurl)
     status = os.system('wget --quiet %s -O %s' % (stateurl, filename))
-    
+
     if status:
         status = os.system('curl --silent %s -o %s' % (stateurl, filename))
     
@@ -223,10 +223,11 @@ def geometries(nodes, wids):
         e = etree.fromstring(r.text.encode('utf-8'))
         lookup = {}
         for n in e.findall(".//node"):
-            lookup[n.get('nid')] = [float(n.get('lon')), float(n.get('lat'))]
+            lookup[n.get('id')] = [float(n.get('lon')), float(n.get('lat'))]
         coords = []
         for n in e.findall(".//nd"):
-            coords.append(lookup[n.get('nid')])
+            if n.get('ref') in lookup:
+                coords.append(lookup[n.get('ref')])
         if len(coords):
             collection["features"].append(polygon([coords]))
 

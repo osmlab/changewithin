@@ -17,8 +17,8 @@ dir_path = os.path.dirname(os.path.abspath(__file__))
 # Set up arguments and parse them.
 #
 parser = argparse.ArgumentParser(description='Generates an email digest of OpenStreetMap building and address changes.')
-parser.add_argument('--oscfile', type=str,
-                   help='OSC change file')
+parser.add_argument('--oscurl', type=str,
+                   help='OSC file URL. For example: http://planet.osm.org/replication/hour/000/021/475.osc.gz. If none given, defaults to latest available day.')
 args = parser.parse_args()
 
 #
@@ -60,10 +60,7 @@ else:
 aoi_poly = aoi['features'][0]['geometry']['coordinates'][0]
 aoi_box = get_bbox(aoi_poly)
 sys.stderr.write('getting state\n')
-if args.oscfile:
-    osc_file = args.oscfile
-else:
-    osc_file = getosc()
+osc_file = getosc(args.oscurl)
 
 sys.stderr.write('reading file\n')
 
