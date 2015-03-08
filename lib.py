@@ -155,6 +155,7 @@ def loadChangeset(changeset):
     r = requests.get(url)
     if not r.text: return changeset
     t = etree.fromstring(r.text.encode('utf-8'))
+    changeset['details'] = dict(t.find('.//changeset').attrib)
     comment = t.find(".//tag[@k='comment']")
     created_by = t.find(".//tag[@k='created_by']")
     if comment is not None: changeset['comment'] = comment.get('v')
