@@ -146,7 +146,9 @@ def load_changeset(changeset):
     changeset['nids'] = changeset['nodes'].keys()
     changeset['addr_chg_nids'] = changeset['addr_chg_nd'].keys()
     changeset['addr_chg_way'] = list(changeset['addr_chg_way'])
-    gjson = make_geojson(changeset['nodes'], changeset['wids'])
+    points = map(get_point, changeset['nodes'].values())
+    polygons = map(get_polygon, changeset['wids'])
+    gjson = geojson_feature_collection(points=points, polygons=polygons)
     extent = get_extent(gjson)
     url = 'http://api.openstreetmap.org/api/0.6/changeset/%s' % changeset['id']
     r = requests.get(url)
@@ -159,7 +161,7 @@ def load_changeset(changeset):
     if created_by is not None: changeset['created_by'] = created_by.get('v')
     changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(gjson)), extent['lon'], extent['lat'], extent['zoom'])
     if len(changeset['map_img']) > 4096:
-        changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(geojson_bbox(gjson))), extent['lon'], extent['lat'], extent['zoom'])
+        changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(bbox_from_geojson(gjson))), extent['lon'], extent['lat'], extent['zoom'])
     changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lat'], extent['lon'], extent['zoom'])
     changeset['addr_count'] = len(changeset['addr_chg_way']) + len(changeset['addr_chg_nids'])
     changeset['bldg_count'] = len(changeset['wids'])
@@ -217,40 +219,42 @@ def extract_coords(gjson):
             coords.append(f['geometry']['coordinates'])
     return coords
 
-def geojson_bbox(gjson):
+def bbox_from_geojson(gjson):
     b = get_bbox(extract_coords(gjson))
     return geojson_polygon([[[b[0], b[1]], [b[0], b[3]], [b[2], b[3]], [b[2], b[1]], [b[0], b[1]]]])
 
-def make_geojson(nodes, wids):
-    collection = {"type": "FeatureCollection", "features": []}
-    for wid in wids:
-        query = '''
-            [out:xml][timeout:25];
-            (
-              way(%s);
-            );
-            out body;
-            >;
-            out skel qt;
-        '''
-        r = requests.post('http://overpass-api.de/api/interpreter', data=(query % wid))
-        if not r.text: continue
-        e = etree.fromstring(r.text.encode('utf-8'))
-        lookup = {}
-        for n in e.findall(".//node"):
-            lookup[n.get('id')] = [float(n.get('lon')), float(n.get('lat'))]
-        coords = []
-        for n in e.findall(".//nd"):
-            if n.get('ref') in lookup:
-                coords.append(lookup[n.get('ref')])
-        if len(coords):
-            collection["features"].append(geojson_polygon([coords]))
-
+def get_polygon(wid):
     coords = []
-    for node in nodes.values():
-        coords.append([node["lon"], node["lat"]])
+    query = '''
+        [out:xml][timeout:25];
+        (
+          way(%s);
+        );
+        out body;
+        >;
+        out skel qt;
+    '''
+    r = requests.post('http://overpass-api.de/api/interpreter', data=(query % wid))
+    if not r.text: return coords
+    e = etree.fromstring(r.text.encode('utf-8'))
+    lookup = {}
+    for n in e.findall(".//node"):
+        lookup[n.get('id')] = [float(n.get('lon')), float(n.get('lat'))]
+    for n in e.findall(".//nd"):
+        if n.get('ref') in lookup:
+            coords.append(lookup[n.get('ref')])
+    return coords
 
-    collection["features"].append(geojson_multi_point(coords))
+def get_point(node):
+    return [node["lon"], node["lat"]]
+
+def geojson_feature_collection(points=[], polygons=[]):
+    collection = {"type": "FeatureCollection", "features": []}
+    if len(points):
+        collection["features"].append(geojson_multi_point(points))
+    for p in polygons:
+        if len(p):
+            collection["features"].append(geojson_polygon([p]))
     return collection
 
 #
