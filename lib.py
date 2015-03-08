@@ -221,11 +221,13 @@ def geometries(nodes, wids):
         r = requests.post('http://overpass-api.de/api/interpreter', data=(query % wid))
         if not r.text: continue
         e = etree.fromstring(r.text.encode('utf-8'))
-        coords = []
+        lookup = {}
         for n in e.findall(".//node"):
-            coords.append([float(n.get('lon')), float(n.get('lat'))])
+            lookup[n.get('nid')] = [float(n.get('lon')), float(n.get('lat'))]
+        coords = []
+        for n in e.findall(".//nd"):
+            coords.append(lookup[n.get('nid')])
         if len(coords):
-            coords.append(coords[0])
             collection["features"].append(polygon([coords]))
 
     for node in nodes.values():
