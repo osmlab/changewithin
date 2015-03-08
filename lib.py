@@ -40,6 +40,13 @@ def getosc(stateurl=None):
     # knock off the ".gz" suffix and return
     return filename[:-3]
 
+# Returns -lon, -lat, +lon, +lat
+#
+#    +---[+lat]---+
+#    |            |
+# [-lon]       [+lon]
+#    |            |
+#    +---[-lat]-- +
 def get_bbox(poly):
     box = [200, 200, -200, -200]
     for p in poly:
@@ -70,21 +77,12 @@ def point_in_poly(x, y, poly):
 
 def coordAverage(c1, c2): return (float(c1) + float(c2)) / 2
 
-def getExtent(nodes):
+def get_extent(gjson):
     extent = {}
     m = MercatorProjection(0)
 
-    max_lon = -180
-    min_lon = 180
-    max_lat = -90
-    min_lat = 90
-    for node in nodes.values():
-        if (max_lon < node['lon']): max_lon = node['lon']
-        if (min_lon > node['lon']): min_lon = node['lon']
-        if (max_lat < node['lat']): max_lat = node['lat']
-        if (min_lat > node['lat']): min_lat = node['lat']
-
-    points = [[max_lat, min_lon], [min_lat, max_lon]]
+    b = get_bbox(extract_coords(gjson))
+    points = [[b[3], b[0]], [b[1], b[2]]]
 
     if (points[0][0] - points[1][0] == 0) or (points[1][1] - points[0][1] == 0):
         extent['lat'] = points[0][0]
@@ -150,7 +148,8 @@ def loadChangeset(changeset):
     changeset['nids'] = changeset['nodes'].keys()
     changeset['addr_chg_nids'] = changeset['addr_chg_nd'].keys()
     changeset['addr_chg_way'] = list(changeset['addr_chg_way'])
-    geoms = geometries(changeset['nodes'], changeset['wids'])
+    gjson = make_geojson(changeset['nodes'], changeset['wids'])
+    extent = get_extent(gjson)
     url = 'http://api.openstreetmap.org/api/0.6/changeset/%s' % changeset['id']
     r = requests.get(url)
     if not r.text: return changeset
@@ -160,8 +159,9 @@ def loadChangeset(changeset):
     created_by = t.find(".//tag[@k='created_by']")
     if comment is not None: changeset['comment'] = comment.get('v')
     if created_by is not None: changeset['created_by'] = created_by.get('v')
-    extent = getExtent(changeset['nodes'])
-    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(geoms)), extent['lon'], extent['lat'], extent['zoom'])
+    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(gjson)), extent['lon'], extent['lat'], extent['zoom'])
+    if len(changeset['map_img']) > 4096:
+        changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(geojson_bbox(gjson))), extent['lon'], extent['lat'], extent['zoom'])
     changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lat'], extent['lon'], extent['zoom'])
     changeset['addr_count'] = len(changeset['addr_chg_way']) + len(changeset['addr_chg_nids'])
     changeset['bldg_count'] = len(changeset['wids'])
@@ -187,17 +187,17 @@ def addnode(el, nid, nodes):
             'lon': float(el.get('lon'))
         }
 
-def point(lat, lon):
+def geojson_multi_point(coords):
     return {
       "type": "Feature",
       "properties": {},
       "geometry": {
-        "type": "Point",
-        "coordinates": [lon, lat]
+        "type": "MultiPoint",
+        "coordinates": coords
       }
     }
 
-def polygon(coords):
+def geojson_polygon(coords):
     return {
       "type": "Feature",
       "properties": {},
@@ -207,7 +207,23 @@ def polygon(coords):
       }
     }
 
-def geometries(nodes, wids):
+def extract_coords(gjson):
+    coords = []
+    for f in gjson['features']:
+        if f['geometry']['type'] == 'Polygon':
+            for c in f['geometry']['coordinates']:
+                coords.extend(c)
+        elif f['geometry']['type'] == 'Multipoint':
+            coords.extend(f['geometry']['coordinates'])
+        elif f['type'] == 'Point':
+            coords.append(f['geometry']['coordinates'])
+    return coords
+
+def geojson_bbox(gjson):
+    b = get_bbox(extract_coords(gjson))
+    return geojson_polygon([[[b[0], b[1]], [b[0], b[3]], [b[2], b[3]], [b[2], b[1]], [b[0], b[1]]]])
+
+def make_geojson(nodes, wids):
     collection = {"type": "FeatureCollection", "features": []}
     for wid in wids:
         query = '''
@@ -230,10 +246,13 @@ def geometries(nodes, wids):
             if n.get('ref') in lookup:
                 coords.append(lookup[n.get('ref')])
         if len(coords):
-            collection["features"].append(polygon([coords]))
+            collection["features"].append(geojson_polygon([coords]))
 
+    coords = []
     for node in nodes.values():
-        collection["features"].append(point(node["lat"], node["lon"]))
+        coords.append([node["lon"], node["lat"]])
+
+    collection["features"].append(geojson_multi_point(coords))
     return collection
 
 #
