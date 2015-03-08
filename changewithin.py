@@ -177,8 +177,10 @@ if config.has_option('mailgun', 'domain') and config.has_option('mailgun', 'api_
                 "html": html_version,
         })
 
-f_out = open('osm_change_report_%s.html' % now.strftime("%m-%d-%y"), 'w')
+file_name = 'osm_change_report_%s.html' % now.strftime("%m-%d-%y")
+f_out = open(file_name, 'w')
 f_out.write(html_version.encode('utf-8'))
 f_out.close()
+print 'Wrote %s' % file_name
 
 os.unlink(osc_file)
