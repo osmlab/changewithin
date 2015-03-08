@@ -6,9 +6,9 @@ import pystache
 import argparse
 
 from lib import (
-    get_bbox, getstate, getosc, point_in_box, point_in_poly,
-    hasbuildingtag, getaddresstags, hasaddresschange, loadChangeset,
-    addchangeset, addnode, html_tmpl, text_tmpl
+    get_bbox, get_osc, point_in_box, point_in_poly,
+    has_building_tag, get_address_tags, has_address_change, load_changeset,
+    add_changeset, add_node, html_tmpl, text_tmpl
     )
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
@@ -60,7 +60,7 @@ else:
 aoi_poly = aoi['features'][0]['geometry']['coordinates'][0]
 aoi_box = get_bbox(aoi_poly)
 sys.stderr.write('getting state\n')
-osc_file = getosc(args.oscurl)
+osc_file = get_osc(args.oscurl)
 
 sys.stderr.write('reading file\n')
 
@@ -83,20 +83,20 @@ for event, n in context:
             if point_in_box(lon, lat, aoi_box) and point_in_poly(lon, lat, aoi_poly):
                 cid = n.get('changeset')
                 nid = n.get('id', -1)
-                addnode(n, nid, nodes)
+                add_node(n, nid, nodes)
                 ntags = n.findall(".//tag[@k]")
-                addr_tags = getaddresstags(ntags)
+                addr_tags = get_address_tags(ntags)
                 version = int(n.get('version'))
                 
                 # Capture address changes
                 if version != 1:
-                    if hasaddresschange(nid, addr_tags, version, 'node'):
-                        addchangeset(n, cid, changesets)
+                    if has_address_change(nid, addr_tags, version, 'node'):
+                        add_changeset(n, cid, changesets)
                         changesets[cid]['nodes'][nid] = nodes[nid]
                         changesets[cid]['addr_chg_nd'][nid] = nodes[nid]
                         stats['addresses'] += 1
                 elif len(addr_tags):
-                    addchangeset(n, cid, changesets)
+                    add_changeset(n, cid, changesets)
                     changesets[cid]['nodes'][nid] = nodes[nid]
                     changesets[cid]['addr_chg_nd'][nid] = nodes[nid]
                     stats['addresses'] += 1
@@ -116,11 +116,11 @@ for event, w in context:
             wid = w.get('id', -1)
             
             # Only if the way has 'building' tag
-            if hasbuildingtag(w):
+            if has_building_tag(w):
                 for nd in w.iterfind('./nd'):
                     if nd.get('ref', -2) in nodes.keys():
                         relevant = True
-                        addchangeset(w, cid, changesets)
+                        add_changeset(w, cid, changesets)
                         nid = nd.get('ref', -2)
                         changesets[cid]['nodes'][nid] = nodes[nid]
                         changesets[cid]['wids'].add(wid)
@@ -128,11 +128,11 @@ for event, w in context:
                 stats['buildings'] += 1
                 wtags = w.findall(".//tag[@k]")
                 version = int(w.get('version'))
-                addr_tags = getaddresstags(wtags)
+                addr_tags = get_address_tags(wtags)
                 
                 # Capture address changes
                 if version != 1:
-                    if hasaddresschange(wid, addr_tags, version, 'way'):
+                    if has_address_change(wid, addr_tags, version, 'way'):
                         changesets[cid]['addr_chg_way'].add(wid)
                         stats['addresses'] += 1
                 elif len(addr_tags):
@@ -141,7 +141,7 @@ for event, w in context:
     w.clear()
     root.clear()
 
-changesets = map(loadChangeset, changesets.values())
+changesets = map(load_changeset, changesets.values())
 
 stats['total'] = len(changesets)
 

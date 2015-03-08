@@ -9,13 +9,13 @@ from tempfile import mkstemp
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
 
-def getstate():
+def get_state():
     r = requests.get('http://planet.openstreetmap.org/replication/day/state.txt')
     return r.text.split('\n')[1].split('=')[1]
 
-def getosc(stateurl=None):
+def get_osc(stateurl=None):
     if not stateurl:
-        state = getstate()
+        state = get_state()
 
         # zero-pad state so it can be safely split.
         state = '000000000' + state
@@ -75,8 +75,6 @@ def point_in_poly(x, y, poly):
         p1x, p1y = p2x, p2y
     return inside
 
-def coordAverage(c1, c2): return (float(c1) + float(c2)) / 2
-
 def get_extent(gjson):
     extent = {}
     m = MercatorProjection(0)
@@ -118,10 +116,10 @@ def get_extent(gjson):
         
     return extent
 
-def hasbuildingtag(n):
+def has_building_tag(n):
     return n.find(".//tag[@k='building']") is not None
     
-def getaddresstags(tags):
+def get_address_tags(tags):
     addr_tags = []
     for t in tags:
         key = t.get('k')
@@ -129,13 +127,13 @@ def getaddresstags(tags):
             addr_tags.append(t.attrib)
     return addr_tags
     
-def hasaddresschange(gid, addr, version, elem):
+def has_address_change(gid, addr, version, elem):
     url = 'http://api.openstreetmap.org/api/0.6/%s/%s/history' % (elem, gid)
     r = requests.get(url)
     if not r.text: return False
     e = etree.fromstring(r.text.encode('utf-8'))
     previous_elem = e.find(".//%s[@version='%s']" % (elem, (version - 1)))
-    previous_addr = getaddresstags(previous_elem.findall(".//tag[@k]"))
+    previous_addr = get_address_tags(previous_elem.findall(".//tag[@k]"))
     if len(addr) != len(previous_addr):
         return True
     else:
@@ -143,7 +141,7 @@ def hasaddresschange(gid, addr, version, elem):
             if a not in previous_addr: return True
     return False
 
-def loadChangeset(changeset):
+def load_changeset(changeset):
     changeset['wids'] = list(changeset['wids'])
     changeset['nids'] = changeset['nodes'].keys()
     changeset['addr_chg_nids'] = changeset['addr_chg_nd'].keys()
@@ -167,7 +165,7 @@ def loadChangeset(changeset):
     changeset['bldg_count'] = len(changeset['wids'])
     return changeset
 
-def addchangeset(el, cid, changesets):
+def add_changeset(el, cid, changesets):
     if not changesets.get(cid, False):
         changesets[cid] = {
             'id': cid,
@@ -179,7 +177,7 @@ def addchangeset(el, cid, changesets):
             'addr_chg_nd': {}
         }
 
-def addnode(el, nid, nodes):
+def add_node(el, nid, nodes):
     if not nodes.get(nid, False):
         nodes[nid] = {
             'id': nid,
