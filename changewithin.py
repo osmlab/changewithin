@@ -3,6 +3,7 @@ from ConfigParser import ConfigParser
 from lxml import etree
 from datetime import datetime
 import pystache
+import argparse
 
 from lib import (
     get_bbox, getstate, getosc, point_in_box, point_in_poly,
@@ -11,6 +12,14 @@ from lib import (
     )
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
+
+#
+# Set up arguments and parse them.
+#
+parser = argparse.ArgumentParser(description='Generates an email digest of OpenStreetMap building and address changes.')
+parser.add_argument('--oscfile', type=str,
+                   help='OSC change file')
+args = parser.parse_args()
 
 #
 # Configure for use. See config.ini for details.
@@ -51,7 +60,10 @@ else:
 aoi_poly = aoi['features'][0]['geometry']['coordinates'][0]
 aoi_box = get_bbox(aoi_poly)
 sys.stderr.write('getting state\n')
-osc_file = getosc()
+if args.oscfile:
+    osc_file = args.oscfile
+else:
+    osc_file = getosc()
 
 sys.stderr.write('reading file\n')
 
@@ -154,22 +166,19 @@ text_version = pystache.render(text_tmpl, {
     'date': now.strftime("%B %d, %Y")
 })
 
-resp = requests.post(('https://api.mailgun.net/v2/%s/messages' % config.get('mailgun', 'domain')),
-    auth = ('api', config.get('mailgun', 'api_key')),
-    data = {
-            'from': 'Change Within <changewithin@%s>' % config.get('mailgun', 'domain'),
-            'to': config.get('email', 'recipients').split(),
-            'subject': 'OSM building and address changes %s' % now.strftime("%B %d, %Y"),
-            'text': text_version,
-            "html": html_version,
-    })
+if config.has_option('mailgun', 'domain') and config.has_option('mailgun', 'api_key'):
+    resp = requests.post(('https://api.mailgun.net/v2/%s/messages' % config.get('mailgun', 'domain')),
+        auth = ('api', config.get('mailgun', 'api_key')),
+        data = {
+                'from': 'Change Within <changewithin@%s>' % config.get('mailgun', 'domain'),
+                'to': config.get('email', 'recipients').split(),
+                'subject': 'OSM building and address changes %s' % now.strftime("%B %d, %Y"),
+                'text': text_version,
+                "html": html_version,
+        })
 
 f_out = open('osm_change_report_%s.html' % now.strftime("%m-%d-%y"), 'w')
 f_out.write(html_version.encode('utf-8'))
 f_out.close()
 
 os.unlink(osc_file)
-
-# print html_version
-
-# print resp, resp.text
