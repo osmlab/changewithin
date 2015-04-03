@@ -1,6 +1,7 @@
 ''' Support functions for changewithin.py script.
 '''
 import time, json, requests, os, sys
+import urllib
 from lxml import etree
 from sets import Set
 from ModestMaps.Geo import MercatorProjection, Location, Coordinate
@@ -8,25 +9,25 @@ from tempfile import mkstemp
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
 
-def getstate():
+def get_state():
     r = requests.get('http://planet.openstreetmap.org/replication/day/state.txt')
     return r.text.split('\n')[1].split('=')[1]
 
-def getosc():
-    state = getstate()
+def get_osc(stateurl=None):
+    if not stateurl:
+        state = get_state()
 
-    # zero-pad state so it can be safely split.
-    state = '000000000' + state
-    path = '%s/%s/%s' % (state[-9:-6], state[-6:-3], state[-3:])
-    
+        # zero-pad state so it can be safely split.
+        state = '000000000' + state
+        path = '%s/%s/%s' % (state[-9:-6], state[-6:-3], state[-3:])
+        stateurl = 'http://planet.openstreetmap.org/replication/day/%s.osc.gz' % path
+
+    sys.stderr.write('downloading %s...\n' % stateurl)
     # prepare a local file to store changes
     handle, filename = mkstemp(prefix='change-', suffix='.osc.gz')
     os.close(handle)
-
-    stateurl = 'http://planet.openstreetmap.org/replication/day/%s.osc.gz' % path
-    sys.stderr.write('downloading %s...\n' % stateurl)
     status = os.system('wget --quiet %s -O %s' % (stateurl, filename))
-    
+
     if status:
         status = os.system('curl --silent %s -o %s' % (stateurl, filename))
     
@@ -39,6 +40,13 @@ def getosc():
     # knock off the ".gz" suffix and return
     return filename[:-3]
 
+# Returns -lon, -lat, +lon, +lat
+#
+#    +---[+lat]---+
+#    |            |
+# [-lon]       [+lon]
+#    |            |
+#    +---[-lat]-- +
 def get_bbox(poly):
     box = [200, 200, -200, -200]
     for p in poly:
@@ -67,14 +75,13 @@ def point_in_poly(x, y, poly):
         p1x, p1y = p2x, p2y
     return inside
 
-def coordAverage(c1, c2): return (float(c1) + float(c2)) / 2
-
-def getExtent(s):
+def get_extent(gjson):
     extent = {}
     m = MercatorProjection(0)
 
-    points = [[float(s['max_lat']), float(s['min_lon'])], [float(s['min_lat']), float(s['max_lon'])]]
-    
+    b = get_bbox(extract_coords(gjson))
+    points = [[b[3], b[0]], [b[1], b[2]]]
+
     if (points[0][0] - points[1][0] == 0) or (points[1][1] - points[0][1] == 0):
         extent['lat'] = points[0][0]
         extent['lon'] = points[1][1]
@@ -109,10 +116,10 @@ def getExtent(s):
         
     return extent
 
-def hasbuildingtag(n):
+def has_building_tag(n):
     return n.find(".//tag[@k='building']") is not None
     
-def getaddresstags(tags):
+def get_address_tags(tags):
     addr_tags = []
     for t in tags:
         key = t.get('k')
@@ -120,13 +127,13 @@ def getaddresstags(tags):
             addr_tags.append(t.attrib)
     return addr_tags
     
-def hasaddresschange(gid, addr, version, elem):
+def has_address_change(gid, addr, version, elem):
     url = 'http://api.openstreetmap.org/api/0.6/%s/%s/history' % (elem, gid)
     r = requests.get(url)
     if not r.text: return False
     e = etree.fromstring(r.text.encode('utf-8'))
     previous_elem = e.find(".//%s[@version='%s']" % (elem, (version - 1)))
-    previous_addr = getaddresstags(previous_elem.findall(".//tag[@k]"))
+    previous_addr = get_address_tags(previous_elem.findall(".//tag[@k]"))
     if len(addr) != len(previous_addr):
         return True
     else:
@@ -134,11 +141,15 @@ def hasaddresschange(gid, addr, version, elem):
             if a not in previous_addr: return True
     return False
 
-def loadChangeset(changeset):
+def load_changeset(changeset):
     changeset['wids'] = list(changeset['wids'])
-    changeset['nids'] = list(changeset['nids'])
-    changeset['addr_chg_nd'] = list(changeset['addr_chg_nd'])
+    changeset['nids'] = changeset['nodes'].keys()
+    changeset['addr_chg_nids'] = changeset['addr_chg_nd'].keys()
     changeset['addr_chg_way'] = list(changeset['addr_chg_way'])
+    points = map(get_point, changeset['nodes'].values())
+    polygons = map(get_polygon, changeset['wids'])
+    gjson = geojson_feature_collection(points=points, polygons=polygons)
+    extent = get_extent(gjson)
     url = 'http://api.openstreetmap.org/api/0.6/changeset/%s' % changeset['id']
     r = requests.get(url)
     if not r.text: return changeset
@@ -148,24 +159,103 @@ def loadChangeset(changeset):
     created_by = t.find(".//tag[@k='created_by']")
     if comment is not None: changeset['comment'] = comment.get('v')
     if created_by is not None: changeset['created_by'] = created_by.get('v')
-    extent = getExtent(changeset['details'])
-    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/%s,%s,%s/300x225.png' % (extent['lon'], extent['lat'], extent['zoom'])
+    changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(gjson)), extent['lon'], extent['lat'], extent['zoom'])
+    if len(changeset['map_img']) > 2048:
+        changeset['map_img'] = 'http://api.tiles.mapbox.com/v3/lxbarth.map-lxoorpwz/geojson(%s)/%s,%s,%s/600x400.png' % (urllib.quote(json.dumps(bbox_from_geojson(gjson))), extent['lon'], extent['lat'], extent['zoom'])
     changeset['map_link'] = 'http://www.openstreetmap.org/?lat=%s&lon=%s&zoom=%s&layers=M' % (extent['lat'], extent['lon'], extent['zoom'])
-    changeset['addr_count'] = len(changeset['addr_chg_way']) + len(changeset['addr_chg_nd'])
+    changeset['addr_count'] = len(changeset['addr_chg_way']) + len(changeset['addr_chg_nids'])
     changeset['bldg_count'] = len(changeset['wids'])
     return changeset
 
-def addchangeset(el, cid, changesets):
+def add_changeset(el, cid, changesets):
     if not changesets.get(cid, False):
         changesets[cid] = {
             'id': cid,
             'user': el.get('user'),
             'uid': el.get('uid'),
             'wids': set(),
-            'nids': set(),
+            'nodes': {},
             'addr_chg_way': set(),
-            'addr_chg_nd': set()
+            'addr_chg_nd': {}
         }
+
+def add_node(el, nid, nodes):
+    if not nodes.get(nid, False):
+        nodes[nid] = {
+            'id': nid,
+            'lat': float(el.get('lat')),
+            'lon': float(el.get('lon'))
+        }
+
+def geojson_multi_point(coords):
+    return {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+        "type": "MultiPoint",
+        "coordinates": coords
+      }
+    }
+
+def geojson_polygon(coords):
+    return {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": coords
+      }
+    }
+
+def extract_coords(gjson):
+    coords = []
+    for f in gjson['features']:
+        if f['geometry']['type'] == 'Polygon':
+            for c in f['geometry']['coordinates']:
+                coords.extend(c)
+        elif f['geometry']['type'] == 'MultiPoint':
+            coords.extend(f['geometry']['coordinates'])
+        elif f['type'] == 'Point':
+            coords.append(f['geometry']['coordinates'])
+    return coords
+
+def bbox_from_geojson(gjson):
+    b = get_bbox(extract_coords(gjson))
+    return geojson_polygon([[[b[0], b[1]], [b[0], b[3]], [b[2], b[3]], [b[2], b[1]], [b[0], b[1]]]])
+
+def get_polygon(wid):
+    coords = []
+    query = '''
+        [out:xml][timeout:25];
+        (
+          way(%s);
+        );
+        out body;
+        >;
+        out skel qt;
+    '''
+    r = requests.post('http://overpass-api.de/api/interpreter', data=(query % wid))
+    if not r.text: return coords
+    e = etree.fromstring(r.text.encode('utf-8'))
+    lookup = {}
+    for n in e.findall(".//node"):
+        lookup[n.get('id')] = [float(n.get('lon')), float(n.get('lat'))]
+    for n in e.findall(".//nd"):
+        if n.get('ref') in lookup:
+            coords.append(lookup[n.get('ref')])
+    return coords
+
+def get_point(node):
+    return [node["lon"], node["lat"]]
+
+def geojson_feature_collection(points=[], polygons=[]):
+    collection = {"type": "FeatureCollection", "features": []}
+    if len(points):
+        collection["features"].append(geojson_multi_point(points))
+    for p in polygons:
+        if len(p):
+            collection["features"].append(geojson_polygon([p]))
+    return collection
 
 #
 # Templates for generated emails.
@@ -194,7 +284,7 @@ html_tmpl = '''
 {{#bldg_count}}Changed buildings ({{bldg_count}}): {{#wids}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/wids}}{{/bldg_count}}
 </p>
 <p style='font-size:14px;line-height:17px;margin-top:5px;margin-bottom:20px;'>
-{{#addr_count}}Changed addresses ({{addr_count}}): {{#addr_chg_nd}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nd}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}{{/addr_count}}
+{{#addr_count}}Changed addresses ({{addr_count}}): {{#addr_chg_nids}}<a href='http://openstreetmap.org/browse/node/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_nids}}{{#addr_chg_way}}<a href='http://openstreetmap.org/browse/way/{{.}}/history' style='text-decoration:none;color:#3879D9;'>#{{.}}</a> {{/addr_chg_way}}{{/addr_count}}
 </p>
 <a href='{{map_link}}'><img src='{{map_img}}' style='border:1px solid #ddd;' /></a>
 {{/changesets}}
@@ -223,6 +313,6 @@ User: http://openstreetmap.org/user/{{#details}}{{user}}{{/details}}
 Comment: {{comment}}
 
 {{#bldg_count}}Changed buildings ({{bldg_count}}): {{wids}}{{/bldg_count}}
-{{#addr_count}}Changed addresses ({{addr_count}}): {{addr_chg_nd}} {{addr_chg_way}}{{/addr_count}}
+{{#addr_count}}Changed addresses ({{addr_count}}): {{addr_chg_nids}} {{addr_chg_way}}{{/addr_count}}
 {{/changesets}}
 '''

@@ -3,14 +3,23 @@ from ConfigParser import ConfigParser
 from lxml import etree
 from datetime import datetime
 import pystache
+import argparse
 
 from lib import (
-    get_bbox, getstate, getosc, point_in_box, point_in_poly,
-    hasbuildingtag, getaddresstags, hasaddresschange, loadChangeset,
-    addchangeset, html_tmpl, text_tmpl
+    get_bbox, get_osc, point_in_box, point_in_poly,
+    has_building_tag, get_address_tags, has_address_change, load_changeset,
+    add_changeset, add_node, html_tmpl, text_tmpl
     )
 
 dir_path = os.path.dirname(os.path.abspath(__file__))
+
+#
+# Set up arguments and parse them.
+#
+parser = argparse.ArgumentParser(description='Generates an email digest of OpenStreetMap building and address changes.')
+parser.add_argument('--oscurl', type=str,
+                   help='OSC file URL. For example: http://planet.osm.org/replication/hour/000/021/475.osc.gz. If none given, defaults to latest available day.')
+args = parser.parse_args()
 
 #
 # Configure for use. See config.ini for details.
@@ -51,11 +60,11 @@ else:
 aoi_poly = aoi['features'][0]['geometry']['coordinates'][0]
 aoi_box = get_bbox(aoi_poly)
 sys.stderr.write('getting state\n')
-osc_file = getosc()
+osc_file = get_osc(args.oscurl)
 
 sys.stderr.write('reading file\n')
 
-nids = set()
+nodes = {}
 changesets = {}
 stats = {}
 stats['buildings'] = 0
@@ -74,22 +83,22 @@ for event, n in context:
             if point_in_box(lon, lat, aoi_box) and point_in_poly(lon, lat, aoi_poly):
                 cid = n.get('changeset')
                 nid = n.get('id', -1)
-                nids.add(nid)
+                add_node(n, nid, nodes)
                 ntags = n.findall(".//tag[@k]")
-                addr_tags = getaddresstags(ntags)
+                addr_tags = get_address_tags(ntags)
                 version = int(n.get('version'))
                 
                 # Capture address changes
                 if version != 1:
-                    if hasaddresschange(nid, addr_tags, version, 'node'):
-                        addchangeset(n, cid, changesets)
-                        changesets[cid]['nids'].add(nid)
-                        changesets[cid]['addr_chg_nd'].add(nid)
+                    if has_address_change(nid, addr_tags, version, 'node'):
+                        add_changeset(n, cid, changesets)
+                        changesets[cid]['nodes'][nid] = nodes[nid]
+                        changesets[cid]['addr_chg_nd'][nid] = nodes[nid]
                         stats['addresses'] += 1
                 elif len(addr_tags):
-                    addchangeset(n, cid, changesets)
-                    changesets[cid]['nids'].add(nid)
-                    changesets[cid]['addr_chg_nd'].add(nid)
+                    add_changeset(n, cid, changesets)
+                    changesets[cid]['nodes'][nid] = nodes[nid]
+                    changesets[cid]['addr_chg_nd'][nid] = nodes[nid]
                     stats['addresses'] += 1
     n.clear()
     root.clear()
@@ -107,23 +116,23 @@ for event, w in context:
             wid = w.get('id', -1)
             
             # Only if the way has 'building' tag
-            if hasbuildingtag(w):
+            if has_building_tag(w):
                 for nd in w.iterfind('./nd'):
-                    if nd.get('ref', -2) in nids:
+                    if nd.get('ref', -2) in nodes.keys():
                         relevant = True
-                        addchangeset(w, cid, changesets)
+                        add_changeset(w, cid, changesets)
                         nid = nd.get('ref', -2)
-                        changesets[cid]['nids'].add(nid)
+                        changesets[cid]['nodes'][nid] = nodes[nid]
                         changesets[cid]['wids'].add(wid)
             if relevant:
                 stats['buildings'] += 1
                 wtags = w.findall(".//tag[@k]")
                 version = int(w.get('version'))
-                addr_tags = getaddresstags(wtags)
+                addr_tags = get_address_tags(wtags)
                 
                 # Capture address changes
                 if version != 1:
-                    if hasaddresschange(wid, addr_tags, version, 'way'):
+                    if has_address_change(wid, addr_tags, version, 'way'):
                         changesets[cid]['addr_chg_way'].add(wid)
                         stats['addresses'] += 1
                 elif len(addr_tags):
@@ -132,7 +141,7 @@ for event, w in context:
     w.clear()
     root.clear()
 
-changesets = map(loadChangeset, changesets.values())
+changesets = map(load_changeset, changesets.values())
 
 stats['total'] = len(changesets)
 
@@ -154,22 +163,21 @@ text_version = pystache.render(text_tmpl, {
     'date': now.strftime("%B %d, %Y")
 })
 
-resp = requests.post(('https://api.mailgun.net/v2/%s/messages' % config.get('mailgun', 'domain')),
-    auth = ('api', config.get('mailgun', 'api_key')),
-    data = {
-            'from': 'Change Within <changewithin@%s>' % config.get('mailgun', 'domain'),
-            'to': config.get('email', 'recipients').split(),
-            'subject': 'OSM building and address changes %s' % now.strftime("%B %d, %Y"),
-            'text': text_version,
-            "html": html_version,
-    })
+if config.has_option('mailgun', 'domain') and config.has_option('mailgun', 'api_key'):
+    resp = requests.post(('https://api.mailgun.net/v2/%s/messages' % config.get('mailgun', 'domain')),
+        auth = ('api', config.get('mailgun', 'api_key')),
+        data = {
+                'from': 'Change Within <changewithin@%s>' % config.get('mailgun', 'domain'),
+                'to': config.get('email', 'recipients').split(),
+                'subject': 'OSM building and address changes %s' % now.strftime("%B %d, %Y"),
+                'text': text_version,
+                "html": html_version,
+        })
 
-f_out = open('osm_change_report_%s.html' % now.strftime("%m-%d-%y"), 'w')
+file_name = 'osm_change_report_%s.html' % now.strftime("%m-%d-%y")
+f_out = open(file_name, 'w')
 f_out.write(html_version.encode('utf-8'))
 f_out.close()
+print 'Wrote %s' % file_name
 
 os.unlink(osc_file)
-
-# print html_version
-
-# print resp, resp.text
